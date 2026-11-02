@@ -28,6 +28,15 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.7.3 — harmony, part three: pivot modulation. Slots now remember their key, so
+  `Progression.modulate(target, at_bar)` can keep the bars before the change,
+  insert a chord diatonic in both keys as a pivot, and regenerate the rest in the
+  new key to its own cadence. Pivots are ranked by what they mean in the *new*
+  key, preferring a subdominant or dominant over one that turns into a weak
+  mediant (D→B minor chooses Em: ii→iv). The demo caught a real melody clash at
+  the seam (G over F#, a flat ninth) which `check_melody` flagged before anyone
+  heard it. The probe reports one key per file, so a modulation averages out in a
+  whole-track profile; split the audio to verify it.
 - 1.7.2 — harmony, part two: function and chromaticism. `hm.Progression.generate()`
   fills a phrase by function (tonic / predominant / dominant) and then spends a
   chromatic budget on applied dominants (`V7/ii`, `V7/V`), borrowed chords

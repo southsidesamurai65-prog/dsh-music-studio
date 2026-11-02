@@ -441,12 +441,14 @@ class Progression:
         self.key = key
         self.bars = bars
         self.slots = []          # one symbol per bar
+        self.slot_keys = []      # the key each slot is written in (modulation)
 
     # -- construction ----------------------------------------------------
     @classmethod
     def from_symbols(cls, symbols, key):
         p = cls(key, len(symbols))
         p.slots = list(symbols)
+        p.slot_keys = [key] * len(symbols)
         return p
 
     def generate(self, bars=None, cadence="PAC", chromatic=2, seed=0,
@@ -458,6 +460,7 @@ class Progression:
         self.bars = n
         self.slots = self._skeleton(n, cadence, rng)
         self._add_chromatic(n, cadence, chromatic, rng)
+        self.slot_keys = [self.key] * n
         return self
 
     def _skeleton(self, n, cadence, rng):
@@ -508,7 +511,7 @@ class Progression:
             roll = rng.random()
             if roll < 0.60 and target in ("ii", "IV", "V", "vi"):
                 slot = f"V7/{target}"
-            elif roll < 0.80 and target in ("I", "IV"):
+            elif roll < 0.80 and target in ("I", "IV") and self.key.mode == "major":
                 slot = rng.choice(["bVI", "bVII", "iv"])
             elif roll < 0.92 and target == "I":
                 slot = "bII7"
@@ -520,9 +523,63 @@ class Progression:
             used.add(i - 1)
             spend += 1
 
+    # -- modulation ------------------------------------------------------
+    def modulate(self, target, at_bar, via=None, cadence="PAC", seed=0,
+                 chromatic=1):
+        """Pivot into another key at `at_bar` (1-based).
+
+        The pivot is a chord that is diatonic in both keys, so the ear hears it
+        as an old chord that happens to mean something new; the bars after it are
+        generated in the target key.
+        """
+        if not (1 <= at_bar <= len(self.slots)):
+            raise ValueError("at_bar out of range")
+        head = self.slots[:at_bar - 1]
+        tail_len = len(self.slots) - at_bar
+        pivot, pivot_note = self._pivot(target, via)
+        tail = Progression(target, max(tail_len, 0))
+        if tail_len > 0:
+            tail.generate(cadence=cadence, chromatic=chromatic, seed=seed)
+        self.slots = head + [pivot] + tail.slots
+        self.slot_keys = ([self.key] * at_bar) + [target] * tail_len
+        self.bars = len(self.slots)
+        self._last_pivot = pivot_note
+        return self
+
+    def _pivot(self, target, via=None):
+        """A chord diatonic in both keys, preferring the requested symbol."""
+        def pcs_of(sym, key):
+            return set(parse(sym, key).pcs())
+
+        target_pcs = {(target.tonic + d) % 12 for d in target.scale}
+        candidates = []
+        for d in range(1, 8):
+            sym = ROMAN[d - 1] if d in (1, 4, 5) else ROMAN[d - 1].lower()
+            if pcs_of(sym, self.key) <= target_pcs:
+                candidates.append(sym)
+        if via is not None:
+            if pcs_of(via, self.key) <= target_pcs:
+                return via, self._pivot_note(via, target)
+            raise ValueError(f"{via} is not diatonic in both keys")
+        if not candidates:
+            return "V", self._pivot_note("V", target)
+        # prefer a pivot that already means something in the new key (a
+        # subdominant or dominant) over one that turns into a weak mediant
+        prefer = ["iv", "IV", "VI", "VII", "V", "i", "I", "ii", "v", "vi", "III", "iii"]
+        def rank(sym):
+            lab = target.label(parse(sym, self.key))
+            return (prefer.index(lab) if lab in prefer else 99, sym)
+        best = min(candidates, key=rank)
+        return best, self._pivot_note(best, target)
+
+    def _pivot_note(self, sym, target):
+        ch = parse(sym, self.key)          # the symbol is written in the old key
+        return (f"{sym} = {self.key.label(ch)} in {self.key} / "
+                f"{target.label(ch)} in {target}")
+
     # -- reading ---------------------------------------------------------
     def chords(self):
-        return [parse(s, self.key) for s in self.slots]
+        return [parse(s, k) for s, k in zip(self.slots, self.slot_keys or [self.key] * len(self.slots))]
 
     def roman(self):
         return list(self.slots)
@@ -531,12 +588,22 @@ class Progression:
         return [c.name() for c in self.chords()]
 
     def realize(self, center=62, voices=4):
-        return realize(self.slots, self.key, center=center, voices=voices)
+        out, prev = [], None
+        for ch in self.chords():
+            prev = voice(ch, prev, center=center, voices=voices)
+            out.append(prev)
+        return out
 
     def validate(self):
         """Cheap syntax checks: applied chords must resolve to their target."""
         problems = []
         ch = self.chords()
+        keys = self.slot_keys or [self.key] * len(self.slots)
+        for i, (sym, k) in enumerate(zip(self.slots, keys)):
+            try:
+                parse(sym, k)
+            except ValueError as exc:
+                problems.append(f"bar {i + 1}: {sym} does not parse in {k}: {exc}")
         for i, sym in enumerate(self.slots):
             if "/" in sym and re.fullmatch(r"V7/[IViv]+", sym):
                 target = sym.split("/")[1]

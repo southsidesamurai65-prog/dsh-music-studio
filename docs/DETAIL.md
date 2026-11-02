@@ -84,6 +84,18 @@ only the voicings moves it by ±0.01, so it measures *rate of change*, not
 richness. A `chromatic_content` metric was tried and removed: it went down when
 chromatic chords were added, because it was measuring spectral leakage.
 
+### Pivot modulation (1.7.3)
+
+Each slot now remembers which key it is written in. `modulate(target, at_bar)`
+keeps the bars before the change, inserts a chord diatonic in both keys as the
+pivot, and regenerates the rest in the new key to its own cadence. Pivots are
+ranked by what they mean in the *new* key, so a subdominant or dominant wins over
+a chord that turns into a weak mediant (D -> B minor gives Em: ii -> iv).
+
+The probe reports one key for a whole file, so a mid-piece modulation averages
+out — in the demo the full render reads B minor because the second half dominates.
+Verifying a modulation means splitting the audio at the section boundary.
+
 ## Stems and the drum bus (1.5.0)
 
 Rendering into one bus is irreversible: once the kick and the strings are summed,

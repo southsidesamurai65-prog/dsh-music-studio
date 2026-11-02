@@ -122,6 +122,22 @@ hm.check_melody(MELODY, p, hm.Key("D"))   # 强拍上的 b9 与三全音
 - 探针新增 `chroma_novelty`（相邻小节 chroma 的距离）：平铺进行 0.389，变化进行 0.464。
   但**它测的是变化速率，不是丰富度**，和声质量只能靠乐谱和耳朵。
 
+### 转调：用枢轴，不要硬切（1.7.3）
+
+```python
+p = hm.Progression(hm.Key("D"), 16).generate(cadence="PAC", chromatic=2, seed=3)
+p.modulate(hm.Key("B", "minor"), at_bar=9, cadence="PAC", seed=1)
+# 枢轴: Em = ii in D / iv in B minor
+```
+
+- 枢轴必须是**两个调都自然**的和弦：D 大调转 b 小调时，Em（ii → iv）、G（IV → VI）、
+  A（V → VII）都是好选择；生成器优先挑在新调里本来就有功能的那种，避开“变成三级”的弱枢轴。
+- 前 8 小节留在旧调、枢轴落在第 9 小节、之后在新调里重新生成到终止式。
+- 转调点最容易出**旋律冲突**：`check_melody` 在 D→b 小调的例子里抓到 G 对 F#（b9），
+  改成 F# 就好了。先跑检查再听。
+- **探针只报一个调**（整首一个全局结果）。要验证转调，必须按段落切开分别测：
+  这次例子整曲报 B minor（后半段主导），后半段单独测才是干净的 B minor。
+
 ## 混音：先分轨，再上总线
 
 **渲染时就分轨**，不要等到混音再分——信号一旦相加就再也拆不开。
