@@ -22,6 +22,11 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.1.0 — `fingerprint` block: attack/decay time per band, per-band spectral
+  flatness and a sustain ratio, so a render and its reference can be compared on
+  *how notes start and ring*, not just on the overall spectrum. It describes
+  behaviour, not instruments: naming a piano from a mixed master would need stem
+  separation, which this probe deliberately does not fake.
 - 1.0.0 — first release that is meant to be used. The 0.x line was a series of
   pre-releases: 0.1.x could not load the skill or read Windows paths, 0.2.x had
   a library that only spoke Chinese-ensemble, and 0.3.x added the arrangement

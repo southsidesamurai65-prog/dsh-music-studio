@@ -195,6 +195,136 @@ def arrangement_of(S, fps, period, phase, mono):
             "texture": texture}
 
 
+# --------------------------------------------------------------- fingerprint
+BANDS = {"low": (60, 250), "mid": (250, 1200), "high": (1200, 5000)}
+
+
+def band_energies(mono, hop=256, win=1024):
+    """Fine-grained band envelopes (~5.8 ms) — a 23 ms hop cannot tell a
+    piano attack from a bowed one."""
+    freqs = np.fft.rfftfreq(win, 1 / SR)
+    masks = {k: (freqs >= lo) & (freqs < hi) for k, (lo, hi) in
+             dict(BANDS, all=(30, 16000)).items()}
+    n = 1 + max(0, (len(mono) - win) // hop)
+    out = {k: np.zeros(n) for k in masks}
+    winf = np.hanning(win)
+    step = 8000
+    for start in range(0, n, step):
+        end = min(n, start + step)
+        idx = np.arange(win)[None, :] + hop * np.arange(start, end)[:, None]
+        S = np.abs(np.fft.rfft(mono[idx] * winf, axis=1))
+        for k, m in masks.items():
+            out[k][start:end] = S[:, m].mean(axis=1)
+    return out
+
+
+def f0_track(mono, hop=512, win=2048):
+    """Rough f0 by autocorrelation, for detecting vibrato."""
+    n = 1 + max(0, (len(mono) - win) // hop)
+    out = np.full(n, np.nan)
+    lo, hi = int(SR / 500), int(SR / 80)
+    nf = 1 << int(np.ceil(np.log2(2 * win)))
+    step = 4000
+    for start in range(0, n, step):
+        end = min(n, start + step)
+        idx = np.arange(win)[None, :] + hop * np.arange(start, end)[:, None]
+        seg = mono[idx]
+        seg = seg - seg.mean(axis=1, keepdims=True)
+        rms = np.sqrt((seg ** 2).mean(axis=1))
+        spec = np.fft.rfft(seg, nf, axis=1)
+        ac = np.fft.irfft(np.abs(spec) ** 2, nf, axis=1)[:, :win]
+        ac = ac / (ac[:, 0:1] + 1e-12)
+        lag = lo + np.argmax(ac[:, lo:hi], axis=1)
+        ok = (rms > 0.008) & (ac[np.arange(len(lag)), lag] > 0.5)
+        out[start:end] = np.where(ok, SR / lag, np.nan)
+    return out, SR / hop
+
+
+def fingerprint_of(mono, S):
+    """Timbral *behaviour*: attack, decay, tonality and pitch wobble per band.
+
+    Overall spectrum is nearly identical between a chamber ensemble and a pop
+    ballad; when and how notes start and ring is not. These descriptors separate
+    instrument families (drums / plucked / struck / bowed / pad) far better,
+    though they still cannot name an instrument and they follow the mix.
+    """
+    E = band_energies(mono)
+    fps = SR / 256
+    for _k in list(E):
+        E[_k] = np.convolve(E[_k], np.ones(3) / 3, "same")
+    env_all = E.pop("all")
+    dz = np.maximum(np.diff(np.log1p(env_all)), 0.0)
+    z = (dz - dz.mean()) / (dz.std() + 1e-9)
+    core = z[1:-1]
+    mad = np.median(np.abs(core - np.median(core))) + 1e-9
+    thr = np.median(core) + 2.0 * mad
+    onsets = [i + 1 for i in range(1, len(z) - 1)
+              if z[i] > thr and z[i] > z[i - 1] and z[i] >= z[i + 1]]
+    onsets = onsets[:600]
+
+    attacks = {k: [] for k in BANDS}
+    decays = {k: [] for k in BANDS}
+    for i in onsets:
+        for name in BANDS:
+            env = E[name]
+            pre = env[max(0, i - 14):max(1, i - 3)]
+            if len(pre) < 3:
+                continue
+            base = float(np.median(pre))
+            seg = env[i:min(len(env), i + 20)]
+            if len(seg) < 6:
+                continue
+            peak = float(seg.max())
+            if peak <= base * 1.05:
+                continue
+            lvl10 = base + 0.1 * (peak - base)
+            lvl90 = base + 0.9 * (peak - base)
+            c10 = int(np.argmax(seg >= lvl10))
+            c90 = int(np.argmax(seg >= lvl90))
+            if c90 >= c10:
+                attacks[name].append((c90 - c10) / fps * 1000.0)
+            after = env[i + c90:min(len(env), i + c90 + 90)]
+            if len(after) > 6:
+                half = base + 0.5 * (peak - base)
+                hit = np.flatnonzero(after <= half)
+                if len(hit) and hit[0] > 0:
+                    decays[name].append(float(hit[0]) / fps * 1000.0)
+
+    def med(v):
+        return round(float(np.median(v)), 1) if v else None
+
+    flatness = {}
+    fg = np.fft.rfftfreq(4096, 1 / SR)
+    for name, (lo, hi) in BANDS.items():
+        m = (fg >= lo) & (fg < hi)
+        block = S[:, m]
+        if block.shape[1] < 4:
+            flatness[name] = None
+            continue
+        g = np.exp(np.mean(np.log(block + 1e-9), axis=1))
+        flatness[name] = round(float(np.median(g / (block.mean(axis=1) + 1e-9))), 3)
+
+    mid = E["mid"]
+    if len(mid) > 8:
+        ratio = mid[4:] / (mid[:-4] + 1e-9)
+        n_min = min(len(ratio), max(0, len(z) - 4))
+        sustain = float(np.mean((ratio[:n_min] > 0.75) & (ratio[:n_min] < 1.35)
+                                & (z[4:4 + n_min] < 0.5)))
+    else:
+        sustain = 0.0
+
+    return {
+        "attack_ms": {k: med(v) for k, v in attacks.items()},
+        "decay_ms": {k: med(v) for k, v in decays.items()},
+        "flatness": flatness,
+        "sustain_ratio": round(sustain, 3),
+        "note": ("behavioural hints: how notes start and ring, and how noisy each band is. "
+                 "Compare a render against its reference on the same numbers; these do not "
+                 "name instruments and they follow the mix (a synthetic render and a mastered "
+                 "commercial track differ even when the arrangement matches)"),
+    }
+
+
 # ------------------------------------------------------------------ rhythm
 def flux(S):
     d = np.diff(np.log1p(S * 20), axis=0)
@@ -499,6 +629,7 @@ def analyse(path):
         "dynamics": {"rms_dbfs": round(20 * np.log10(rms + 1e-9), 1),
                      "crest_db": round(crest, 1), "arc_8ths_db": arc},
         "arrangement": arrangement_of(S, fps, period, phase, mono),
+        "fingerprint": fingerprint_of(mono, S),
         "arrangement_1s": blocks,
     }
 

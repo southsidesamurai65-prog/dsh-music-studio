@@ -27,6 +27,7 @@ This bundle adds two capabilities to a DSH profile:
 | `assets/synth_lib.py` | additive-synthesis instruments: guzheng, dizi, xiao, erhu, pipa, yangqin, sheng, rhodes, pad, bass, drums, bells, gong, reverb, mastering |
 | `assets/templates/lofi.py` | full lo-fi example (49 s) |
 | `assets/templates/jiangnan.py` | full Jiangnan-style example (109 s) |
+| `assets/templates/pop_ballad.py` | pop-ballad starting point (piano/strings/bass/drums) |
 | `assets/STYLE_GUIDE.md` | the long-form methodology |
 
 ## Example
@@ -36,6 +37,17 @@ This bundle adds two capabilities to a DSH profile:
    `synth_lib` (the skill points at its absolute path).
 3. Render, then probe the render and compare tempo, key, band balance and dynamics
    against the reference.
+
+## Fingerprint (1.1.0)
+
+`fingerprint` describes *how* notes behave, not which instrument plays them:
+attack time per band, decay time, per-band spectral flatness (tonal vs noisy) and
+a sustain ratio. Compare a render against its reference on the same numbers —
+a commercial master and a synthetic render differ systematically (noise floor,
+mastering colour), so read them relatively.
+
+Naming an instrument from a mixed master would need stem separation; the probe
+deliberately does not guess.
 
 ## Notes
 

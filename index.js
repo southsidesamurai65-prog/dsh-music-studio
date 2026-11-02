@@ -79,6 +79,16 @@ function run(command, args, timeoutMs) {
 }
 
 /** One line on texture: attacks, pulse, backbeat — hears a rhythm section, not a score. */
+function fingerprintLine(f) {
+  if (!f) return 'not measured'
+  const atk = f.attack_ms ?? {}
+  const dec = f.decay_ms ?? {}
+  const flat = f.flatness ?? {}
+  const fmt = o => ['low', 'mid', 'high'].map(k => (o[k] == null ? '?' : o[k])).join('/')
+  return `attack ${fmt(atk)} ms, decay ${fmt(dec)} ms, noise (flatness) ${fmt(flat)},`
+    + ` sustain ${f.sustain_ratio}`
+}
+
 function arrangementLine(a) {
   if (!a) return 'not measured'
   const bb = a.backbeat_ratio == null ? '' : `, backbeat ${a.backbeat_ratio}`
@@ -108,6 +118,7 @@ function summarize(profile) {
     `dynamics: rms ${profile.dynamics?.rms_dbfs} dBFS, crest ${profile.dynamics?.crest_db} dB`,
     `arc (8 slices, dB): ${(profile.dynamics?.arc_8ths_db ?? []).join(' ')}`,
     `arrangement: ${arrangementLine(profile.arrangement)}`,
+    `texture: ${fingerprintLine(profile.fingerprint)}`,
   ].join('\n')
 }
 
@@ -118,7 +129,8 @@ export function apply(ctx) {
       'Analyse a reference audio file into a music style profile: tempo and beat grid,',
       'key (with alternatives), per-bar chord estimate and loop, timbre (spectral centroid',
       'and band balance), stereo width and reverb tail, dynamics, an arrangement arc, and',
-      'Also reports arrangement hints: onset rate, low-band pulse, backbeat ratio and',
+      'Also reports arrangement hints (onset rate, low-band pulse, backbeat ratio, presence)',
+      'and texture hints (attack/decay time, per-band noise, sustain ratio) to compare a render',
       'check the match. Requires python3 with numpy; ffmpeg decodes non-WAV input.',
     ].join(' '),
     parameters: {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-music-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Reference-driven music sketching for DSH: a style probe, a compose-in-style skill, and a numpy synth library with role-based palettes and mix presets.",
   "type": "module",
   "main": "index.js",
