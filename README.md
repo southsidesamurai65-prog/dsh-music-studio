@@ -10,6 +10,7 @@ A DSH bundle for reference-driven music sketching.
 - `assets/mix.py` — stem-wise mixdown: drum bus, multiband compression, convolution
   reverb, width and loudness targets, limiter and knee clipper
 - `assets/phrase.py` — motif development and phrase building
+- `assets/ablate.py` — paired ablations: does each probe metric move when its cause moves?
 
 Install into a profile from the directory that contains this package:
 
@@ -26,6 +27,21 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.6.0 — an ablation benchmark, and two bugs it caught. `assets/ablate.py` renders
+  one 28 s piece into stems, then re-mixes it with exactly one dimension changed per
+  pair (drums out, bow→plectrum, pad muted, 3 kHz low-pass, width ×2.2, reverb
+  0.25→0.60, −16→−12 dBFS, whole-bus compression) and compares what the probe says.
+  Required movements must hold or the run exits non-zero, so a probe change is now a
+  regression. Measured sensitivity: backbeat 2.29→1.18 without drums, 2.29→1.60
+  under bus compression; mid attack 34.8→29.0 ms bow→pluck; centroid 728→489 Hz
+  through a 3 kHz low-pass; width 0.21→0.46 at ×2.2. Three false positives came out
+  of it and are documented: `backbeat_ratio` follows spectral balance (a 3 kHz
+  low-pass pushes it to 3.30), `onset_rate` *rises* when the drums are removed
+  (loud transients raise the adaptive threshold), and drum-less material reads at
+  double tempo. The benchmark also caught two real bugs: `make_ir` was 11–14 dB
+  quieter than a measured IR (every synthetic-reverb mix was far drier than its
+  `wet` value), and the width target was silently capped at 6× so narrow material
+  missed the preset target.
 - 1.5.0 — stems and a drum bus. `synth_lib.Stems` renders into named stems
   (`drums`/`bass`/`music`/`fx`) instead of one bus, and `mix.mixdown()` mixes them:
   drums get glue compression (slow attack) plus parallel compression, everything

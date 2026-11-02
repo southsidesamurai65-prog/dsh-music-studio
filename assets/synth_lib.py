@@ -518,10 +518,18 @@ def clap(vel=1.0):
 
 # --------------------------------------------------------------------- space
 def make_ir(sec=2.4, decay=1.0, lo=200, hi=6500):
+    """Synthetic room: filtered noise with an exponential decay, unit energy.
+
+    It used to be divided by sqrt(n), which made it ~11 dB quieter than a
+    measured IR normalised the same way — every synth-reverb mix was far drier
+    than its `wet` suggested. `load_ir` normalises to unit energy, so this
+    does too.
+    """
     n = int(sec * SR)
     t = np.arange(n) / SR
     ir = _rng.standard_normal(n) * np.exp(-t / decay)
-    return fft_filter(ir, lo=lo, hi=hi, order=1) / np.sqrt(n)
+    ir = fft_filter(ir, lo=lo, hi=hi, order=1)
+    return ir / (np.sqrt((ir ** 2).sum()) + 1e-12)
 
 
 def convolve(x, h):

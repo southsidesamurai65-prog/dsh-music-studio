@@ -69,6 +69,26 @@ snare hit), and `soft_clip` applied a tanh across the whole signal (2.4 dB of pe
 loss). Loudness is now targeted in dBFS and stereo width against a preset target
 rather than a fixed side multiplier.
 
+## Ablation benchmark (1.6.0)
+
+`assets/ablate.py` renders one 28 s piece into stems, then mixes it again with a
+single dimension changed per pair — drums out, bowed lead swapped for a plucked
+one, pad muted, top end filtered, width doubled, reverb drenched, level pushed,
+the bus compressed — and asks the probe about every version. Same notes, same
+seed, same loudness unless loudness is the variable.
+
+It exists to keep the probe honest: each `must` entry is a documented promise
+(backbeat falls when the kit goes, attack time shortens when the bow becomes a
+plectrum), and a failure exits non-zero. It also records effect sizes, so a
+difference smaller than the measured sensitivity is known to be noise.
+
+It found three false positives on the first run: `backbeat_ratio` follows
+spectral balance (a 3 kHz low-pass moved it from 2.29 to 3.30), `onset_rate` goes
+*up* when the drums are removed (loud transients raise the adaptive threshold),
+and tempo is read at double time on drum-less material. It also caught two real
+bugs elsewhere: `make_ir` was 11-14 dB quieter than a measured IR, and the
+limiter's centred gain smoothing started ducking 45 ms before every hit.
+
 ## Notes
 
 - Everything is synthesized from scratch; no samples are shipped.

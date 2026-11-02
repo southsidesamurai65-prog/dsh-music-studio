@@ -410,7 +410,9 @@ def mixdown(stems, preset="pop", ir=None, eq=None, section_env=None,
     if width is None:
         target_w = p.get("width_target", 0.40)
         cur_w = _width(bus)
-        side_gain = float(np.clip(target_w / cur_w, 0.0, 6.0)) if cur_w > 1e-6 else 1.0
+        # 10x is the cap: beyond that the material is mono by design and
+        # widening it only amplifies noise
+        side_gain = float(np.clip(target_w / cur_w, 0.0, 10.0)) if cur_w > 1e-6 else 1.0
     else:
         side_gain = float(width)
     if abs(side_gain - 1.0) > 1e-3:
