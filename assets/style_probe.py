@@ -537,6 +537,16 @@ def analyse(path):
             if m > 0.90 and m > loop_sim:
                 loop, loop_sim = p, m
 
+    # harmonic motion between bars: 1 - cosine of consecutive bar chroma.
+    # Unlike the chord labels this does not depend on naming, so it survives
+    # wrong guesses and can be compared across pieces.
+    if len(bar_vecs) >= 3:
+        sims = [float(a @ b) for a, b in zip(bar_vecs, bar_vecs[1:])]
+        chroma_novelty = round(1.0 - float(np.mean(sims)), 3)
+        chroma_repeat = round(float(np.mean([s > 0.97 for s in sims])), 3)
+    else:
+        chroma_novelty, chroma_repeat = None, None
+
     bars, chord_names, chord_alts, roots, chord_quals, confs = [], [], [], [], [], []
     if loop:
         for s_i in range(loop):
@@ -621,6 +631,8 @@ def analyse(path):
             "loop": loop_names if loop else None,
             "loop_similarity": round(loop_sim, 3),
             "roman": [roman(r, q, key_root, mode) for r, q in loop_quals] if loop else None,
+            "chroma_novelty": chroma_novelty,
+            "chroma_repeat_rate": chroma_repeat,
         },
         "timbre": {"centroid_hz": round(centroid), "character": char(centroid),
                    "band_balance_db": bal},

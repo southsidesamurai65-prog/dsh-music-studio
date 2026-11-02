@@ -28,6 +28,18 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.7.2 — harmony, part two: function and chromaticism. `hm.Progression.generate()`
+  fills a phrase by function (tonic / predominant / dominant) and then spends a
+  chromatic budget on applied dominants (`V7/ii`, `V7/V`), borrowed chords
+  (`bVI`, `bVII`, `iv`) and one tritone substitution (`bII7`), with every
+  insertion resolving forward and a budget per phrase so the piece does not turn
+  into secondary dominants. `validate()` checks the resolutions, `check_melody()`
+  flags only a flat ninth over the root and a tritone against it — a 6th, 9th or
+  11th is colour. The probe gained `chroma_novelty` / `chroma_repeat_rate`
+  (diatonic loop 0.389, generated progression 0.464; voicing swaps move it ±0.01,
+  so it measures change, not richness). A `chromatic_content` metric was tried
+  and removed: it fell when chromatic chords were added, because it measured
+  spectral leakage.
 - 1.7.1 — harmony, part one: degrees and voice leading. `assets/harmony.py` stops
   storing chords as absolute pitch blocks. A chord is a degree plus a quality
   (`I`, `vi`, `V7`, `ii7b5`, `bVI`, `#IVdim7`, `V/3` for a first inversion, `V/V`

@@ -65,6 +65,25 @@ and contain 9 parallel perfects, voice-led ones move 91 with none. The probe
 cannot see the difference — it measures the result, not the counterpoint — so
 acceptance is by ear plus the score-level `motion_total()` / `parallels()`.
 
+### Functional generation (1.7.2)
+
+`hm.Progression.generate()` fills a phrase by function (tonic / predominant /
+dominant, four bars per group), then spends a chromatic budget: applied dominants
+(`V7/ii`, `V7/V`), borrowed chords (`bVI`, `bVII`, `iv`) and one tritone
+substitution (`bII7`). Insertions must resolve forward, never touch each other,
+and leave the first and last bars plain; `validate()` checks that every applied
+chord lands on its target.
+
+`check_melody()` reports only a flat ninth over the root and a tritone against
+it — a 6th, 9th, 11th or major seventh is colour, and flagging those would make
+the check cry wolf.
+
+The probe gained `chords.chroma_novelty` (cosine distance between consecutive bar
+chroma): 0.389 for a diatonic loop, 0.464 for the generated progression. Swapping
+only the voicings moves it by ±0.01, so it measures *rate of change*, not
+richness. A `chromatic_content` metric was tried and removed: it went down when
+chromatic chords were added, because it was measuring spectral leakage.
+
 ## Stems and the drum bus (1.5.0)
 
 Rendering into one bus is irreversible: once the kick and the strings are summed,

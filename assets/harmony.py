@@ -424,6 +424,165 @@ def block(names, key, center=62):
     return out
 
 
+# ------------------------------------------------------------- progression
+T, PD, D = "T", "PD", "D"
+FUNCTION = {"I": T, "vi": T, "iii": T, "ii": PD, "IV": PD, "V": D, "vii": D}
+
+
+class Progression:
+    """A chord per bar, written as scale degrees, with a functional generator.
+
+    The generator is not a random walk over chords: it fills a phrase with
+    functions (tonic / predominant / dominant), lands the cadence, and only
+    then spends a chromatic budget on applied dominants and borrowed chords.
+    """
+
+    def __init__(self, key, bars=8):
+        self.key = key
+        self.bars = bars
+        self.slots = []          # one symbol per bar
+
+    # -- construction ----------------------------------------------------
+    @classmethod
+    def from_symbols(cls, symbols, key):
+        p = cls(key, len(symbols))
+        p.slots = list(symbols)
+        return p
+
+    def generate(self, bars=None, cadence="PAC", chromatic=2, seed=0,
+                 rhythm=None):
+        """Build a phrase. `chromatic` is the maximum number of altered chords."""
+        import random
+        rng = random.Random(seed)
+        n = bars or self.bars
+        self.bars = n
+        self.slots = self._skeleton(n, cadence, rng)
+        self._add_chromatic(n, cadence, chromatic, rng)
+        return self
+
+    def _skeleton(self, n, cadence, rng):
+        """Function-first: 4-bar groups, each closing on a dominant."""
+        deg = []
+        for b in range(n):
+            pos = b % 4
+            if pos == 0:
+                deg.append(rng.choice(["I", "I", "vi", "iii"]))
+            elif pos == 1:
+                deg.append(rng.choice(["IV", "ii", "IV"]))
+            elif pos == 2:
+                deg.append(rng.choice(["V", "V", "ii"]))
+            else:
+                deg.append(rng.choice(["I", "I", "vi", "V"]))
+        # final bar is the cadence target
+        if n >= 2:
+            if cadence == "PAC":
+                deg[-2], deg[-1] = "V", "I"
+            elif cadence == "HC":
+                deg[-2], deg[-1] = "I", "V"
+            elif cadence == "DC":
+                deg[-2], deg[-1] = "V", "vi"
+            elif cadence == "PC":
+                deg[-2], deg[-1] = "IV", "I"
+        return deg
+
+    def _add_chromatic(self, n, cadence, budget, rng):
+        """Spend the budget on applied dominants, borrowed chords, one tritone sub.
+
+        Each insertion must resolve forward: a V7/x sits immediately before x, a
+        borrowed chord only before a tonic or subdominant, and the tritone
+        substitute only before the tonic. Two altered chords never touch.
+        """
+        if budget <= 0 or n < 4:
+            return
+        used, spend = set(), 0
+        order = list(range(1, n - 2))
+        rng.shuffle(order)
+        for i in order:
+            if spend >= budget:
+                break
+            if (i - 1) in used or i in used or i - 1 <= 0 or i >= n - 2:
+                continue
+            target, prev = self.slots[i], self.slots[i - 1]
+            if prev not in FUNCTION or target not in FUNCTION or FUNCTION[prev] == D:
+                continue
+            roll = rng.random()
+            if roll < 0.60 and target in ("ii", "IV", "V", "vi"):
+                slot = f"V7/{target}"
+            elif roll < 0.80 and target in ("I", "IV"):
+                slot = rng.choice(["bVI", "bVII", "iv"])
+            elif roll < 0.92 and target == "I":
+                slot = "bII7"
+            else:
+                continue
+            if slot == self.slots[i - 1] or slot in used:
+                continue
+            self.slots[i - 1] = slot
+            used.add(i - 1)
+            spend += 1
+
+    # -- reading ---------------------------------------------------------
+    def chords(self):
+        return [parse(s, self.key) for s in self.slots]
+
+    def roman(self):
+        return list(self.slots)
+
+    def names(self):
+        return [c.name() for c in self.chords()]
+
+    def realize(self, center=62, voices=4):
+        return realize(self.slots, self.key, center=center, voices=voices)
+
+    def validate(self):
+        """Cheap syntax checks: applied chords must resolve to their target."""
+        problems = []
+        ch = self.chords()
+        for i, sym in enumerate(self.slots):
+            if "/" in sym and re.fullmatch(r"V7/[IViv]+", sym):
+                target = sym.split("/")[1]
+                nxt = self.slots[i + 1] if i + 1 < len(self.slots) else None
+                if nxt != target:
+                    problems.append(f"bar {i + 1}: {sym} does not resolve to {target}")
+            if i and self.slots[i - 1] == sym and sym not in ("I", "V"):
+                problems.append(f"bar {i + 1}: {sym} repeats")
+        return problems
+
+    def __len__(self):
+        return len(self.slots)
+
+    def __repr__(self):
+        return "Progression(" + " ".join(self.slots) + ")"
+
+
+def check_melody(melody, progression, key, bars_per_chord=1):
+    """Flag melody notes that actually fight the chord.
+
+    Only two cases are reported: the flat ninth (a semitone above the *root*,
+    the classic "avoid" tone) and the tritone against the root. A 6th, 9th,
+    11th or major seventh over the chord is colour; so is a semitone above a
+    chord tone that is not the root (the 11th over a major triad), which pop
+    melodies use constantly — flagging those makes the check useless.
+    """
+    ch = progression.chords()
+    out = []
+    for bar, beat, dur, midi in melody:
+        idx = int(bar - 1) // bars_per_chord
+        if idx < 0 or idx >= len(ch):
+            continue
+        if abs(beat - round(beat)) > 1e-6 or int(round(beat)) % 2 != 0:
+            continue                      # only strong beats (0 and 2 in 4/4)
+        pc = midi % 12
+        c = ch[idx]
+        tones = set(c.pcs())
+        if pc in tones:
+            continue
+        if (c.root + 1) % 12 == pc:
+            out.append((bar, beat, midi, f"b9 {PC_NAME[pc]} over {c.name()}"))
+        elif (pc - c.root) % 12 == 6:
+            out.append((bar, beat, midi, f"tritone {PC_NAME[pc]} over {c.name()}"))
+    return out
+
+
 def selftest():
     """Assertions for the parts that are easy to get subtly wrong."""
     D = Key("D")
