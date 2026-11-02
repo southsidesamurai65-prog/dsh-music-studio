@@ -52,6 +52,19 @@ mastering colour), so read them relatively.
 Naming an instrument from a mixed master would need stem separation; the probe
 deliberately does not guess.
 
+## Harmony (1.7.1)
+
+`assets/harmony.py` replaces the absolute-pitch chord table with scale degrees
+and voice-led voicings: `hm.parse("V7", Key("D"))` is A7, `hm.realize(prog, key)`
+voices a whole progression with the least motion consistent with no parallel
+fifths or octaves and voices kept in their registers. `V/3` is a first inversion,
+`V/V` a secondary dominant, `I/C` a named bass.
+
+Measured on a 16-bar A/B with the same melody: block voicings move 159 semitones
+and contain 9 parallel perfects, voice-led ones move 91 with none. The probe
+cannot see the difference — it measures the result, not the counterpoint — so
+acceptance is by ear plus the score-level `motion_total()` / `parallels()`.
+
 ## Stems and the drum bus (1.5.0)
 
 Rendering into one bus is irreversible: once the kick and the strings are summed,

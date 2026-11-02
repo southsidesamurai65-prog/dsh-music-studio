@@ -15,6 +15,7 @@ import numpy as np
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
+import harmony as hm
 import mix as mx
 import synth_lib as sl
 
@@ -45,17 +46,12 @@ def place(sig, t0, pan=0.0, gain=1.0, rev=0.25, role="music"):
 
 
 # ---------------------------------------------------------------- harmony
-VOICE = {              # bass midi + voicing (kept above D3 by transposition)
-    "D":     (38, [50, 57, 62, 66]),
-    "A/C#":  (37, [49, 57, 61, 64]),
-    "Bm":    (35, [47, 54, 59, 62]),
-    "Gmaj7": (31, [43, 50, 54, 59]),
-    "D/F#":  (30, [42, 50, 54, 57]),
-    "Em7":   (28, [40, 47, 50, 55]),
-    "Asus4": (33, [45, 52, 57, 62]),
-    "A7":    (33, [45, 52, 55, 61]),
-}
-PROG = ["D", "A/C#", "Bm", "Gmaj7", "D/F#", "Em7", "Asus4", "A7"] * 2
+# Chords are scale degrees, and each voicing is led from the previous one, so
+# the inner parts become lines instead of blocks.
+KEY = hm.Key("D")
+PROG = ["Imaj7", "V/3", "vim7", "IVmaj7", "I/3", "iim7", "Vsus4", "V7"] * 2
+VOICINGS = hm.realize(PROG, KEY)          # four voices, nearest motion
+BASSES = [v[0] - 12 for v in VOICINGS]    # bass an octave under the chord
 
 # ---------------------------------------------------------------- melody
 MELODY = [  # (bar, beat, beats, midi, velocity)
@@ -82,27 +78,24 @@ MELODY = [  # (bar, beat, beats, midi, velocity)
 for bar in range(1, BARS + 1):
     if bar == 1:
         continue
-    chord = PROG[(bar - 1) % len(PROG)]
-    bass_m, notes = VOICE[chord]
+    bar_idx = (bar - 1) % len(PROG)
+    notes = VOICINGS[bar_idx]              # four voice-led chord tones
+    bass_m = BASSES[bar_idx]
     t0 = bt(bar)
     chorus = bar >= 9
 
-    # piano: broken 8ths
+    # piano: broken eighths over the voicing, not a fixed block
     seq = [(0.0, 0, .55), (0.5, 2, .40), (1.0, 1, .45), (1.5, 3, .40),
            (2.0, 2, .50), (2.5, 1, .38), (3.0, 3, .46), (3.5, 2, .36)]
-    for off, idx, v in seq:
-        m = notes[idx % len(notes)]
-        while m < 50:
-            m += 12
-        place(sl.piano(P(m), 1.2, v), t0 + off * BEAT, 0.16, 0.55, 0.22)
+    for off, voice, v in seq:
+        place(sl.piano(P(notes[voice % len(notes)]), 1.2, v),
+              t0 + off * BEAT, 0.16, 0.55, 0.22)
     place(sl.piano(P(bass_m + 12), 1.6, .40), t0, -0.06, 0.50, 0.20)
 
-    # strings from bar 5
+    # strings from bar 5, the upper three voices an octave up
     if bar >= 5:
         for i, m in enumerate(notes[1:4]):
-            while m < 55:
-                m += 12
-            place(sl.strings(P(m), BAR * 1.03, .5), t0, -0.55 + 0.45 * i,
+            place(sl.strings(P(m + 12), BAR * 1.03, .5), t0, -0.55 + 0.45 * i,
                   0.34 if not chorus else 0.5, 0.32)
 
     # bass

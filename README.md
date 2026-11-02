@@ -10,6 +10,7 @@ A DSH bundle for reference-driven music sketching.
 - `assets/mix.py` — stem-wise mixdown: drum bus, multiband compression, convolution
   reverb, width and loudness targets, limiter and knee clipper
 - `assets/phrase.py` — motif development and phrase building
+- `assets/harmony.py` — chords as scale degrees, with voice-led voicings
 - `assets/ablate.py` — paired ablations: does each probe metric move when its cause moves?
 
 Install into a profile from the directory that contains this package:
@@ -27,6 +28,16 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.7.1 — harmony, part one: degrees and voice leading. `assets/harmony.py` stops
+  storing chords as absolute pitch blocks. A chord is a degree plus a quality
+  (`I`, `vi`, `V7`, `ii7b5`, `bVI`, `#IVdim7`, `V/3` for a first inversion, `V/V`
+  for a secondary dominant), and `realize()` voices a progression with the least
+  motion that avoids parallel fifths and octaves and keeps each voice in its
+  register. Measured on a 16-bar A/B with the same melody: block voicings move
+  159 semitones with 9 parallel perfects, voice-led ones 91 with none. The probe
+  cannot see this, so the acceptance test is `motion_total()` / `parallels()`
+  plus the ear. The pop-ballad template now writes its progression in roman
+  numerals and uses the voicings.
 - 1.6.0 — an ablation benchmark, and two bugs it caught. `assets/ablate.py` renders
   one 28 s piece into stems, then re-mixes it with exactly one dimension changed per
   pair (drums out, bow→plectrum, pad muted, 3 kHz low-pass, width ×2.2, reverb

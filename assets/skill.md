@@ -79,11 +79,30 @@
   铺底 `pad` `strings` `choir`｜低音 `bass` `bass_pluck` `ebass`｜打击 `kick`
   `snare` `hat` `shaker` `clap` `rim` `drum_low` `muyu` `bell` `gong`
 - 采样：`use_soundfont(path)`，然后 `sf_play(program)` / `sf_play(0, bank=128)`（鼓组）
+- 和声：`harmony.Key` / `parse` / `voice` / `realize` / `block` / `motion_total` / `parallels`
 - 分轨：`Stems(seconds)` → `.add(role, sig, t0, pan, gain)` / `.play(instrument, …)` /
   `.total()` / `.report()`
 - 母线：`mix.mixdown(stems, preset, ir=…)` / `mix.write_stems(prefix, stems)`
 - 单总线（老素材）：`add(bus, sig, t0, pan, gain)`、`apply_reverb`、`master`、`write_wav`
 - 工具：`midi2f` `fft_filter` `gate` `compress` `seed` `palette`
+
+## 和声：用级数，不用音高表
+
+```python
+import harmony as hm
+KEY = hm.Key("D")
+prog = ["Imaj7", "V/3", "vim7", "IVmaj7", "I/3", "iim7", "Vsus4", "V7"]
+voicings = hm.realize(prog, KEY)      # 四个声部，每个都从前一个就近移动
+```
+
+- 和弦写成**级数 + 性质**：`I` `vi` `V7` `ii7b5` `bVI` `#IVdim7`，也接受 `Dmaj7` 这类绝对写法。
+- `V/3` 是第一转位（三音在低音），`V/V` 是副属（属和弦的属），`I/C` 是指定低音。
+- `realize` 做三件事：就近移动、禁止平行五八度、每个声部留在自己的音区。
+  声部数按和弦自动取（九和弦用五个声部）。
+- **实测**（16 小节、同一段旋律、只换排法）：块状排法总位移 159 个半音、9 处平行五八度；
+  就近排法 91 个半音、0 处平行。
+- **探针看不出这个差别**（音色重心只差 25 Hz）。这类改进只能靠耳朵，以及乐谱级指标
+  `hm.motion_total()` / `hm.parallels()`——别指望跑一遍探针就能验收声部进行。
 
 ## 混音：先分轨，再上总线
 
