@@ -118,6 +118,32 @@ y = piano(sl.midi2f(60), 2.0, 0.8)       # 和合成乐器同样的调用方式
 - 采样乐器自带力度与音区分层，比合成件更像真的；代价是体积和加载时间。
 - 合成件仍然有用：需要非真实音色、或没有对应 GM 音色时（如笙、木鱼）。
 
+## 句法：动机发展（`phrase.py`）
+
+“旋律一直在重复”通常不是音色问题，是**只写了一个动机**。一个动机不是一段旋律，
+旋律是你对它做的事：
+
+```python
+import phrase as ph
+motif = [(0.0,0.75,2), (0.75,0.25,3), (1.0,0.5,4), (1.5,0.5,3), (2.0,1.0,1), (3.0,0.5,0), (3.5,0.5,1)]
+a   = ph.cadence(motif, 0)                       # 呈示，落在主音
+a2  = ph.cadence(ph.transpose(motif, 1), 2)      # 上方一度，落在三音
+b   = ph.invert(motif, pivot=2, anchor=3)        # 倒影，换方向
+a3  = ph.cadence(ph.ornament(ph.sequence(motif, 2, 1)), 4)   # 模进 + 加花
+a4  = ph.cadence(ph.ornament(ph.augment(motif, 1.5)), 2)     # 时值扩大，收束
+```
+
+可用的操作：`transpose` `invert` `retrograde` `augment` `diminish` `fragment`
+`sequence` `ornament` `cadence` `humanize`。`cadence` 把句尾按到指定的和弦音上，
+是“句子说完了”而不是“又重复一遍”的关键。
+
+写法建议：
+
+- 一段 8 小节用 **A A′ B A″**：呈示 → 模进 → 倒影（换音区）→ 扩大收束。
+- 每段换了操作就换**音区**或**主奏乐器**，听众才听得出“这是新的一句”。
+- 节奏型至少要有三种（长音、附点、切分），别让每句都是同样的四分音符。
+- `ph.repetition_score(events)` 可以粗看轮廓重复率，但它是启发式，不替代耳朵。
+
 ## 混音总线（`mix.py`）
 
 合成/采样给的是**素材**，总线给的是**成品感**：

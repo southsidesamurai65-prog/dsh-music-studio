@@ -8,6 +8,7 @@ A DSH bundle for reference-driven music sketching.
 - `assets/templates/` — three starting points (lo-fi, 江南, pop ballad)
 - `assets/sf2.py` — SoundFont 2 player for real sampled instruments (bring your own bank)
 - `assets/mix.py` — convolution reverb, multiband compression, limiter, soft clip
+- `assets/phrase.py` — motif development and phrase building
 
 Install into a profile from the directory that contains this package:
 
@@ -24,6 +25,11 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.4.0 — phrasing. `assets/phrase.py`: motif operations (transpose, invert,
+  retrograde, augment/diminish, fragment, sequence, ornament, cadence,
+  humanise), scale-degree rendering and a rough contour-repetition score. The
+  point is that a motif is not a melody: the example piece states one motif and
+  then sequences, mirrors and stretches it.
 - 1.3.0 — mixing bus. `assets/mix.py`: real-IR convolution reverb (predelay +
   high-pass), zero-phase multiband compression with soft knee and makeup gain,
   a look-ahead peak limiter, and a soft clipper. `MIX_PRESETS` gained the bus
