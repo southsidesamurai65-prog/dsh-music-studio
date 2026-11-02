@@ -1,0 +1,35 @@
+{
+  "name": "dsh-music-studio",
+  "version": "1.0.0",
+  "description": "Reference-driven music sketching for DSH: a style probe, a compose-in-style skill, and a numpy synth library with role-based palettes and mix presets.",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "docs",
+    "assets",
+    "!**/__pycache__",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "music",
+    "style-transfer",
+    "synthesis"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.0 <0.3.0"
+  },
+  "author": "dsh-music-studio contributors",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,29 @@
+# dependencies / packaging output
+node_modules/
+dist/
+*.tgz
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# rendered audio and images (regenerable from the scripts)
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.png
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# logs and local notes
+*.log
+npm-debug.log*
+.notes/
