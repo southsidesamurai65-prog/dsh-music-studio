@@ -28,6 +28,19 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.7.6 — the pipa gets a body and a hand. Two things were missing and neither was
+  EQ: a plucked string that keeps ringing after the string stops, and the gestures.
+  `_pipa_body()` convolves every stroke with a short five-resonance wooden-box
+  impulse response, so the instrument blooms between strokes. New `pipa_strum()`
+  strikes four strings 11-16 ms apart (simultaneous is a chord; staggered is a hand
+  crossing the strings). `pipa_tremolo()` now re-excites one ringing string with
+  independent phases, ±4 ms timing jitter and varying velocity instead of stacking
+  identical copies, which used to beat like a machine gun. Recalibrated against a
+  real pipa passage (a 26 s solo section of a reference track): attack centroid
+  831 Hz against the reference's 777 (the previous fix overshot to 1075), 2-4 kHz
+  -13.8 dB against -16.2, sustain 0.61-0.67 against 0.78. A level bug fell out of
+  it as well: summing four strings peaked 15 dB over full scale, so both the body
+  and the gesture layer now normalise to the input peak.
 - 1.7.5 — a pipa that does not sound like a piano. `pipa_pluck` had borrowed the
   piano's recipe: eight partials on smooth long decays with a quiet click. On C4,
   92.6% of its energy sat below 1 kHz and it rang for 1.28 s, which is exactly why

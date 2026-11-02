@@ -74,7 +74,7 @@
 
 `{{ASSETS}}/synth_lib.py`（`sl`）提供：
 
-- 乐器（28 件）：拨弦 `guzheng` `pipa_pluck` `pipa_tremolo` `yangqin`｜管乐
+- 乐器（28 件）：拨弦 `guzheng` `pipa_pluck` `pipa_strum` `pipa_tremolo` `yangqin`｜管乐
   `dizi` `xiao` `sheng`｜弓弦 `erhu` `violin` `cello`｜键盘 `piano` `rhodes`｜
   铺底 `pad` `strings` `choir`｜低音 `bass` `bass_pluck` `ebass`｜打击 `kick`
   `snare` `hat` `shaker` `clap` `rim` `drum_low` `muyu` `bell` `gong`
@@ -103,6 +103,9 @@ voicings = hm.realize(prog, KEY)      # 四个声部，每个都从前一个就�
   就近排法 91 个半音、0 处平行。
 - **探针看不出这个差别**（音色重心只差 25 Hz）。这类改进只能靠耳朵，以及乐谱级指标
   `hm.motion_total()` / `hm.parallels()`——别指望跑一遍探针就能验收声部进行。
+- 拨弦乐器的“手势”比音色更容易露馅：单个音再像，扫弦和轮指做不出来一样是假的。
+  `pipa_strum(notes, vel, spread)` 用 11–16 ms 的扫弦间隔，`pipa_tremolo` 用独立相位
+  + 时序抖动 + 力度变化往同一根弦上加振。
 
 ### 变化和弦与功能生成（1.7.2）
 

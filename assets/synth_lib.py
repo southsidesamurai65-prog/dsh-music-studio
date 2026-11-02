@@ -173,56 +173,105 @@ def _peak(x, fc, db, width):
     return np.fft.irfft(X, len(x))
 
 
-def pipa_pluck(freq, dur, vel=0.7):
-    """Pipa single stroke: nail click, stretched partials, fast decay.
+def _pipa_body(x):
+    """The wooden box: a short resonant impulse response.
 
-    A pipa is not a piano. The old model borrowed the piano's recipe — eight
-    partials on smooth long decays, a quiet click — so 93% of its energy sat
-    below 1 kHz and it rang for 1.3 s. That is why it read as a piano. Most of a
-    pipa's identity lives in the first hundred milliseconds: a hard nail click,
-    upper partials gone in a tenth of a second, two slightly detuned courses,
-    and a body with nasal resonances at 1.6 and 3.3 kHz.
-
-    Measured on C4: attack centroid 1.24 kHz (piano 0.34 kHz), 60% of the attack
-    above 1 kHz (piano 3%), decay to -20 dB 0.32 s (piano 2.86 s).
+    This is what turns a plucked string into a pipa — and what makes the sound
+    keep blooming between strokes instead of stopping when the string does.
     """
-    dur = max(dur, 0.25)
-    n = int((dur + 0.45) * SR)
+    n = int(0.16 * SR)
+    t = np.arange(n) / SR
+    ir = np.zeros(n)
+    ir[0] = 1.0
+    for fc, amp, dec in ((190.0, 0.08, 0.050), (430.0, 0.12, 0.040),
+                         (900.0, 0.30, 0.030), (1400.0, 0.30, 0.028),
+                         (2400.0, 0.20, 0.018)):
+        ir += amp * np.sin(2 * np.pi * fc * t + _rng.uniform(0, 6.28)) * np.exp(-t / dec)
+    ir /= np.max(np.abs(ir))
+    nf = 1 << int(np.ceil(np.log2(len(x) + n)))
+    wet = np.fft.irfft(np.fft.rfft(x, nf) * np.fft.rfft(ir, nf), nf)[:len(x)]
+    out = 0.45 * x + 0.55 * wet
+    p_in = np.max(np.abs(x)) + 1e-9
+    return out * (p_in / (np.max(np.abs(out)) + 1e-9))       # the body must not add level
+
+
+def _pipa_stroke(freq, dur, vel=0.7):
+    """One nail stroke on one string, before the body is applied."""
+    dur = max(dur, 0.30)
+    n = int((dur + 0.85) * SR)
     t = np.arange(n) / SR
     y = np.zeros(n)
-    for k in range(1, 18):
-        f = freq * k * (1 + 0.0015 * k * k)          # short, stiff, stretched
+    for k in range(1, 15):
+        f = freq * k * (1 + 0.0011 * k * k)
         if f > 0.45 * SR:
             break
-        amp = 0.6 if k == 1 else 1.0 / k ** 0.5
-        dec = 0.30 / (1 + 1.6 * (k - 1))
+        amp = 0.60 if k == 1 else 1.0 / k ** 0.5
+        dec = 0.55 / (1 + 0.6 * (k - 1))       # the fundamental rings, the rest does not
         y += amp * np.sin(2 * np.pi * f * t + _rng.uniform(0, 6.28)) * np.exp(-t / dec)
-    det = 2 ** (5 / 1200)                             # the paired course
-    for k in range(1, 10):
-        f = freq * det * k * (1 + 0.0015 * k * k)
+    det = 2 ** (5 / 1200)                       # the paired course
+    for k in range(1, 8):
+        f = freq * det * k * (1 + 0.0011 * k * k)
         if f > 0.45 * SR:
             break
-        y += 0.4 / k ** 0.5 * np.sin(2 * np.pi * f * t + _rng.uniform(0, 6.28)) \
-            * np.exp(-t / (0.27 / (1 + 1.6 * (k - 1))))
-    y += fft_filter(_rng.standard_normal(n), lo=2500, hi=11000) * np.exp(-t / 0.020) * 0.6
-    nail = fft_filter(_rng.standard_normal(n), lo=1500, hi=12000, order=1)
-    y += nail * np.exp(-t / 0.0015) * 0.25
-    y = _peak(_peak(y, 1650.0, 7.0, 0.55), 3300.0, 6.0, 0.50)
-    y = fft_filter(y, lo=110.0, hi=14000.0, order=1)
-    y *= gate(n, 0.001, 0.20)
-    return y * (0.85 * vel / (np.max(np.abs(y)) + 1e-9))
+        y += 0.30 / k ** 0.5 * np.sin(2 * np.pi * f * t + _rng.uniform(0, 6.28)) \
+            * np.exp(-t / (0.48 / (1 + 0.6 * (k - 1))))
+    # nail: a short band-limited noise burst; the old one was 2.5-11 kHz and too loud
+    y += fft_filter(_rng.standard_normal(n), lo=1200.0, hi=5200.0, order=1) \
+        * np.exp(-t / 0.016) * 0.22
+    y = fft_filter(y, lo=95.0, hi=9500.0, order=1)
+    y *= gate(n, 0.001, 0.35)
+    return y * (vel / (np.max(np.abs(y)) + 1e-9))
+
+
+def pipa_pluck(freq, dur, vel=0.7):
+    """Pipa single stroke: string + wooden body."""
+    return _pipa_body(_pipa_stroke(freq, dur, vel)) * 0.85
+
+
+def pipa_strum(notes, vel=0.7, spread=0.013, down=True):
+    """扫弦: several strings struck a few milliseconds apart.
+
+    The stagger is the whole sound. Struck simultaneously it reads as one thick
+    chord; spread over 10-20 ms it reads as a hand crossing the strings, and the
+    body resonance of the first strings colours the later ones.
+    """
+    if not notes:
+        return np.zeros(1)
+    order = list(notes) if down else list(reversed(notes))
+    t0, total = 0.0, 0.0
+    layer = []
+    for m in order:
+        x = _pipa_stroke(midi2f(m), 0.6, vel)
+        layer.append((int(t0 * SR), x))
+        total = max(total, t0 + len(x) / SR)
+        t0 += spread
+    n = int(total * SR) + 1
+    y = np.zeros(n)
+    for k, x in layer:
+        j = min(k + len(x), n)
+        y[k:j] += x[: j - k]
+    return _pipa_body(y) * 0.85
 
 
 def pipa_tremolo(freq, dur, vel=0.6, rate=0.075):
-    """轮指: rapid repeated strokes."""
-    n = int((dur + 1.0) * SR)
+    """轮指: repeated strokes on one string, each with its own phase and timing.
+
+    Summing identical copies (the old version) beats at a fixed rate and sounds
+    mechanical; real 轮指 jitters a few milliseconds per stroke, varies velocity,
+    and lets the string ring into the next attack.
+    """
+    n = int((dur + 0.9) * SR)
     y = np.zeros(n)
-    for s in range(max(1, int(dur / rate))):
-        seg = pipa_pluck(freq, 0.12, 1.0)
-        k = int(s * rate * SR)
-        j = min(k + len(seg), n)
-        y[k:j] += seg[: j - k] * np.exp(-s * rate / 1.2)
-    return y * vel * 0.5
+    t, i = 0.0, 0
+    while t < dur:
+        x = _pipa_stroke(freq, 0.45, vel * (0.78 + 0.25 * _rng.random()))
+        k = int((t + _rng.normal(0, 0.004)) * SR)
+        k = max(0, min(k, n - 1))
+        j = min(k + len(x), n)
+        y[k:j] += x[: j - k]
+        t += rate * (0.88 + 0.24 * _rng.random())
+        i += 1
+    return _pipa_body(y) * 0.85
 
 
 def yangqin(freq, dur, vel=0.6):
