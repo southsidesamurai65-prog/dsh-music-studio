@@ -564,3 +564,34 @@ def palette(preset="pop"):
     for role, names in INSTRUMENTS.items():
         lines.append(f"  {role:8s} {', '.join(names)}")
     return "\n".join(lines)
+
+
+# ----------------------------------------------------------------- soundfont
+_SF = None
+_SF_CACHE = {}
+
+
+def use_soundfont(path):
+    """Load an .sf2 bank for sampled instruments (see sf2.py). Returns it."""
+    global _SF
+    from sf2 import SoundFont
+    _SF = SoundFont(path)
+    _SF_CACHE.clear()
+    return _SF
+
+
+def soundfont():
+    return _SF
+
+
+def sf_play(program, bank=0):
+    """Make an instrument function (freq, dur, vel) from the loaded bank."""
+    def play(freq, dur, vel=0.8):
+        if _SF is None:
+            raise RuntimeError("call synth_lib.use_soundfont(path) first")
+        key = 69 + 12 * np.log2(max(freq, 1e-6) / 440.0)
+        ck = (program, bank, round(key, 2), round(dur, 2), round(vel, 2))
+        if ck not in _SF_CACHE:
+            _SF_CACHE[ck] = _SF.note(program, key, vel, dur, bank=bank)
+        return _SF_CACHE[ck] * (vel if False else 1.0)
+    return play

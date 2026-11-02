@@ -97,6 +97,27 @@ print(sl.palette("pop"))     # 角色表 + 混音起点；还有 chamber / lofi 
 - 色彩：`guzheng` `pipa_pluck` `yangqin` `bell` `gong`
 - 新加的非民乐件：`piano` `strings` `ebass` `snare` `shaker` `violin` `cello` `choir` `clap`
 
+## 真实音色（采样，优先用）
+
+加法合成撑得起编配，撑不起“这是真钢琴”。有 .sf2 音色库时优先用采样：
+
+```python
+import os, synth_lib as sl
+sl.use_soundfont(os.environ["SF2"])      # 例如 GeneralUser-GS.sf2
+piano   = sl.sf_play(0)                  # 原声钢琴
+strings = sl.sf_play(48)                 # 弦乐组
+bass    = sl.sf_play(33)                 # 指弹电贝斯
+violin  = sl.sf_play(40)
+koto    = sl.sf_play(107)                # 古筝近似
+choir   = sl.sf_play(52)
+kit     = sl.sf_play(0, bank=128)        # GM 鼓组：36 底鼓 / 38 军鼓 / 42 闭镲 / 49 吊镲
+y = piano(sl.midi2f(60), 2.0, 0.8)       # 和合成乐器同样的调用方式
+```
+
+- 采样库**不随插件分发**（授权各不相同）。让用户自己下载，用 `SF2` 环境变量指路径。
+- 采样乐器自带力度与音区分层，比合成件更像真的；代价是体积和加载时间。
+- 合成件仍然有用：需要非真实音色、或没有对应 GM 音色时（如笙、木鱼）。
+
 ## 混音预设
 
 `sl.MIX_PRESETS` 是**起点**（混响湿度/时长、压缩档、母带峰值、宽度增益、目标区间）：

@@ -6,6 +6,7 @@ A DSH bundle for reference-driven music sketching.
 - skill `compose-in-style` — the workflow and the layered brief template
 - `assets/synth_lib.py` — numpy instruments (Chinese ensemble + lo-fi kit), reverb, mastering
 - `assets/templates/` — three starting points (lo-fi, 江南, pop ballad)
+- `assets/sf2.py` — SoundFont 2 player for real sampled instruments (bring your own bank)
 
 Install into a profile from the directory that contains this package:
 
@@ -22,6 +23,11 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.2.0 — sampled instruments. `assets/sf2.py` is a numpy-only SoundFont 2 reader
+  (zones, velocity layers, loop points, volume envelope, tuning, attenuation, pan)
+  and `synth_lib.use_soundfont()` / `synth_lib.sf_play()` expose it with the same
+  call signature as the synth instruments. No sample data is shipped: users point
+  `SF2` at their own bank and are responsible for its licence.
 - 1.1.0 — `fingerprint` block: attack/decay time per band, per-band spectral
   flatness and a sustain ratio, so a render and its reference can be compared on
   *how notes start and ring*, not just on the overall spectrum. It describes
