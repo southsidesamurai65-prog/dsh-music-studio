@@ -4,10 +4,11 @@ A DSH bundle for reference-driven music sketching.
 
 - tool `music_style_probe` — audio → style profile (tempo, key, chords, timbre, space, dynamics, structure)
 - skill `compose-in-style` — the workflow and the layered brief template
-- `assets/synth_lib.py` — numpy instruments (Chinese ensemble + lo-fi kit), reverb, mastering
+- `assets/synth_lib.py` — numpy instruments (Chinese ensemble + lo-fi kit), stems, mixing, mastering
 - `assets/templates/` — three starting points (lo-fi, 江南, pop ballad)
 - `assets/sf2.py` — SoundFont 2 player for real sampled instruments (bring your own bank)
-- `assets/mix.py` — convolution reverb, multiband compression, limiter, soft clip
+- `assets/mix.py` — stem-wise mixdown: drum bus, multiband compression, convolution
+  reverb, width and loudness targets, limiter and knee clipper
 - `assets/phrase.py` — motif development and phrase building
 
 Install into a profile from the directory that contains this package:
@@ -25,6 +26,18 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.5.0 — stems and a drum bus. `synth_lib.Stems` renders into named stems
+  (`drums`/`bass`/`music`/`fx`) instead of one bus, and `mix.mixdown()` mixes them:
+  drums get glue compression (slow attack) plus parallel compression, everything
+  else gets the multiband compressor, and only then do the two meet. Two bugs fell
+  out of it: the limiter's gain envelope was smoothed with a *centred* 90 ms window
+  that started ducking 45 ms before every snare hit, and `soft_clip` applied a tanh
+  across the whole signal (2.4 dB of peak loss). Fixing both — forward-looking
+  look-ahead, make-up gain, and a proper knee clipper — is where the extra punch
+  comes from. Measured on a 177 s piece: backbeat ratio 1.68 -> 1.92 (the kit's own
+  contrast is 2.01, so retention went from 84% to 96%) at the same crest. Stereo
+  width is now solved against a preset target instead of a fixed side multiplier,
+  and loudness is targeted in dBFS rather than guessed.
 - 1.4.0 — phrasing. `assets/phrase.py`: motif operations (transpose, invert,
   retrograde, augment/diminish, fragment, sequence, ornament, cadence,
   humanise), scale-degree rendering and a rough contour-repetition score. The

@@ -26,7 +26,7 @@
      你的偏干净；参考低段起音 12 ms、你的 75 ms，说明参考更钉、你的更拖。
      它同样不给乐器名，也受母带影响：商用成品和自渲染在同一份指标上天生有差异。
 2. **写简报**：按六层展开（见下），每层给出具体数值或乐器名，并写明**不要什么**。把简报回给用户确认（若用户已明确，可直接开工）。
-3. **合成**：新建 `compose_<name>.py`，`import synth_lib as sl`（路径见下），用 numpy 合成。结构上先定 BPM/调性/和弦，再写旋律，再加伴奏，最后混音。
+3. **合成**：新建 `compose_<name>.py`，`import synth_lib as sl`（路径见下），用 numpy 合成。结构上先定 BPM/调性/和弦，再写旋律，再加伴奏，最后混音。**渲染时就分轨**（`sl.Stems`），别等到混音再拆。
    - 固定随机种子 `sl.seed(7)` 保证可复现。
    - 每件乐器写成 `(bar, beat, midi, dur, velocity)` 的数据表，方便改。
 4. **验证**：对成品再跑一次 `music_style_probe`，对比 BPM、调性、频段平衡、宽度、动态弧与参考的差距；用 ffmpeg 画波形/频谱图检查结构与削波。
@@ -74,122 +74,83 @@
 
 `{{ASSETS}}/synth_lib.py`（`sl`）提供：
 
-- 乐器：`guzheng` `dizi` `xiao` `erhu` `pipa_pluck` `pipa_tremolo` `yangqin` `sheng` `rhodes` `pad` `bass` `bass_pluck` `kick` `rim` `hat` `drum_low` `muyu` `bell` `gong`
-- 空间：`make_ir` `convolve` `apply_reverb(mix, send, wet=…)`
-- 母线：`add(bus, sig, t0, pan, gain)`；`master(mix, …)`；`write_wav(path, mix)`
-- 工具：`midi2f` `fft_filter` `gate` `compress` `seed`
+- 乐器（28 件）：拨弦 `guzheng` `pipa_pluck` `pipa_tremolo` `yangqin`｜管乐
+  `dizi` `xiao` `sheng`｜弓弦 `erhu` `violin` `cello`｜键盘 `piano` `rhodes`｜
+  铺底 `pad` `strings` `choir`｜低音 `bass` `bass_pluck` `ebass`｜打击 `kick`
+  `snare` `hat` `shaker` `clap` `rim` `drum_low` `muyu` `bell` `gong`
+- 采样：`use_soundfont(path)`，然后 `sf_play(program)` / `sf_play(0, bank=128)`（鼓组）
+- 分轨：`Stems(seconds)` → `.add(role, sig, t0, pan, gain)` / `.play(instrument, …)` /
+  `.total()` / `.report()`
+- 母线：`mix.mixdown(stems, preset, ir=…)` / `mix.write_stems(prefix, stems)`
+- 单总线（老素材）：`add(bus, sig, t0, pan, gain)`、`apply_reverb`、`master`、`write_wav`
+- 工具：`midi2f` `fft_filter` `gate` `compress` `seed` `palette`
 
-示例工程（可直接改）：`{{ASSETS}}/templates/lofi.py`、`{{ASSETS}}/templates/jiangnan.py`。
-方法论文档：`{{ASSETS}}/STYLE_GUIDE.md`。
+## 混音：先分轨，再上总线
 
-按角色挑乐器（不要再顺手拿上次那件）：
-
-```python
-import synth_lib as sl
-print(sl.palette("pop"))     # 角色表 + 混音起点；还有 chamber / lofi / cinematic
-```
-
-- 主奏：`dizi` `xiao` `erhu` `violin` `cello` `piano` `rhodes` `choir`
-- 节奏：`piano` `guzheng` `pipa_pluck` `yangqin` `rhodes`
-- 低音：`bass` `bass_pluck` `ebass` `cello`
-- 鼓组：`kick` `snare` `hat` `shaker` `clap` `rim` `drum_low` `muyu`
-- 铺底：`pad` `strings` `choir` `sheng`
-- 色彩：`guzheng` `pipa_pluck` `yangqin` `bell` `gong`
-- 新加的非民乐件：`piano` `strings` `ebass` `snare` `shaker` `violin` `cello` `choir` `clap`
-
-## 真实音色（采样，优先用）
-
-加法合成撑得起编配，撑不起“这是真钢琴”。有 .sf2 音色库时优先用采样：
+**渲染时就分轨**，不要等到混音再分——信号一旦相加就再也拆不开。
 
 ```python
-import os, synth_lib as sl
-sl.use_soundfont(os.environ["SF2"])      # 例如 GeneralUser-GS.sf2
-piano   = sl.sf_play(0)                  # 原声钢琴
-strings = sl.sf_play(48)                 # 弦乐组
-bass    = sl.sf_play(33)                 # 指弹电贝斯
-violin  = sl.sf_play(40)
-koto    = sl.sf_play(107)                # 古筝近似
-choir   = sl.sf_play(52)
-kit     = sl.sf_play(0, bank=128)        # GM 鼓组：36 底鼓 / 38 军鼓 / 42 闭镲 / 49 吊镲
-y = piano(sl.midi2f(60), 2.0, 0.8)       # 和合成乐器同样的调用方式
+import synth_lib as sl, mix as mx
+st = sl.Stems(N / SR)                      # roles: drums / bass / music / fx
+st.add("drums", sl.kick(), t0, 0.0, 0.9)   # 或 st.play("snare", sig, t0) 按角色自动分
+st.add("music", sl.piano(m, 2.0), t0, 0.2, 0.5)
+st.add("fx",    sig, t0, 0.1, 0.2)         # fx 只进混响发送，不进干声
+ir = mx.load_ir("ConradPrebysConcertHall.wav")
+bus = mx.mixdown(st, preset="pop", ir=ir)  # 一条链出成品
 ```
 
-- 采样库**不随插件分发**（授权各不相同）。让用户自己下载，用 `SF2` 环境变量指路径。
-- 采样乐器自带力度与音区分层，比合成件更像真的；代价是体积和加载时间。
-- 合成件仍然有用：需要非真实音色、或没有对应 GM 音色时（如笙、木鱼）。
+`mixdown` 的链路：
 
-## 句法：动机发展（`phrase.py`）
-
-“旋律一直在重复”通常不是音色问题，是**只写了一个动机**。一个动机不是一段旋律，
-旋律是你对它做的事：
-
-```python
-import phrase as ph
-motif = [(0.0,0.75,2), (0.75,0.25,3), (1.0,0.5,4), (1.5,0.5,3), (2.0,1.0,1), (3.0,0.5,0), (3.5,0.5,1)]
-a   = ph.cadence(motif, 0)                       # 呈示，落在主音
-a2  = ph.cadence(ph.transpose(motif, 1), 2)      # 上方一度，落在三音
-b   = ph.invert(motif, pivot=2, anchor=3)        # 倒影，换方向
-a3  = ph.cadence(ph.ornament(ph.sequence(motif, 2, 1)), 4)   # 模进 + 加花
-a4  = ph.cadence(ph.ornament(ph.augment(motif, 1.5)), 2)     # 时值扩大，收束
+```
+drums ──▶ 胶水压缩(慢起音) + 并联压缩(快起音) ──┐
+music ──▶ 均衡 ▶ 多段压缩 ─────────────────────┼──▶ 求和 ▶ 宽度 ▶ 段落增益
+send  ──▶ 实测脉冲响应 ▶ 湿声返回 ─────────────┘        ▶ 对准响度 ▶ 限幅 ▶ 膝削波
 ```
 
-可用的操作：`transpose` `invert` `retrograde` `augment` `diminish` `fragment`
-`sequence` `ornament` `cadence` `humanize`。`cadence` 把句尾按到指定的和弦音上，
-是“句子说完了”而不是“又重复一遍”的关键。
+要点：
 
-写法建议：
-
-- 一段 8 小节用 **A A′ B A″**：呈示 → 模进 → 倒影（换音区）→ 扩大收束。
-- 每段换了操作就换**音区**或**主奏乐器**，听众才听得出“这是新的一句”。
-- 节奏型至少要有三种（长音、附点、切分），别让每句都是同样的四分音符。
-- `ph.repetition_score(events)` 可以粗看轮廓重复率，但它是启发式，不替代耳朵。
-
-## 混音总线（`mix.py`）
-
-合成/采样给的是**素材**，总线给的是**成品感**：
-
-```python
-import mix as mx
-ir = mx.load_ir("ConradPrebysConcertHall.wav")   # 实测脉冲响应
-bus = mx.reverb(bus, ir, wet=0.32, predelay=0.022)      # 真房间
-bus = mx.multiband_compress(bus, (200.0, 2000.0),
-                            (-30.0, -28.0, -32.0), ratio=2.0,
-                            makeup_db=(2.5, 2.0, 2.5))  # 分频段压
-bus = mx.limiter(bus, ceiling_db=-1.5, lookahead_ms=6)  # 前视限幅
-bus = mx.soft_clip(bus, ceiling_db=-1.0, drive_db=3.5)  # 最后几 dB
-```
-
-- **顺序**：混响 → 均衡 → 多段压缩 → 段落增益 → 限幅 → 软削波。
-- 多段压缩保住了“低频不糊、中频不挤”，但也**会削反拍**：军鼓的瞬态在
-  200–2000 Hz 那一档里。想保住鼓点，就把那一档的阈值调高、比率调低。
-- 软削波能补上 2–3 dB 响度，但超过 4 dB 就会听出“压扁”。
+- **鼓不进多段压缩**。军鼓瞬态就在 200–2000 Hz 那一档里，整条总线压过去
+  会把它和铺底一起压平。实测（《兰亭一页》177 s）：整条压缩反拍 1.68，
+  分轨后 1.92，原始素材 2.01——瞬态保留率 84% → 96%。
+- **鼓总线**用慢起音（20–35 ms）让槌击穿过去，再混一小份快起音、8:1 的
+  并联压缩补密度；输出峰值归一化回输入，这就是它的补偿增益。
+- **别调响度去救鼓**。把鼓推大 2–4 dB 不会提高反拍比，只会让限幅器更用力，
+  数字反而降（实测 +4 dB：1.92 → 1.88）。
+- **宽度按目标解，别用固定倍率**：窄声场的合成素材和宽声场的采样素材需要
+  不同的侧面增益，预设里存的是目标值（`width_target`），`mixdown` 自己解。
+- **限幅器要带补偿**。释放时间总是滞后，输出会停在峰值下方 2–3 dB、crest 偏低，
+  听起来“响但扁”。`limiter(..., makeup=True)` 把这段余量还回去。
+- **软削波是膝削波**，只削过膝的那几 dB。拿 tanh 套整条信号是压缩不是削波
+  （实测峰值白掉 2.4 dB、反拍 1.92 → 1.83）。
 - 目标参考：crest 10–13 dB、RMS 对齐参考、宽度 0.35–0.45。
 
 ## 混音预设
 
-`sl.MIX_PRESETS` 是**起点**（混响湿度/时长、压缩档、母带峰值、宽度增益、目标区间）：
+`sl.MIX_PRESETS` 是**起点**（响度目标、宽度目标、鼓总线、多段压缩档）：
 
-| preset | 适用 | 混响 wet | 宽度目标 | crest 目标 |
-|---|---|---|---|---|
-| `chamber` | 民乐室内、丝竹 | 0.30 | 0.30–0.55 | 12–16 dB |
-| `pop` | 流行、中国风流行 | 0.20 | 0.35–0.55 | 10–14 dB |
-| `lofi` | lo-fi、卧室 | 0.25 | 0.15–0.35 | 12–18 dB |
-| `cinematic` | 管弦、影视 | 0.42 | 0.35–0.60 | 14–20 dB |
+| preset | 适用 | 响度目标 | 宽度目标 | 鼓胶水 | 并联 |
+|---|---|---|---|---|---|
+| `chamber` | 民乐室内、丝竹 | −17 dBFS | 0.35 | 2.2:1 @ −17 dB | 0.20 |
+| `pop` | 流行、中国风流行 | −13 dBFS | 0.42 | 2.4:1 @ −16 dB | 0.25 |
+| `lofi` | lo-fi、卧室 | −14.5 dBFS | 0.25 | 2.0:1 @ −19 dB | 0.30 |
+| `cinematic` | 管弦、影视 | −17.5 dBFS | 0.45 | 3.0:1 @ −14 dB | 0.30 |
 
-用预设起步，然后**对成品跑探针**，把 `centroid_hz / width / crest_db` 和目标区间对齐；
-对不上就改对应的一项，别把整套参数搬过来。
+用预设起步，然后**对成品跑探针**，把 `centroid_hz / width / crest_db / backbeat_ratio`
+和目标区间对齐；对不上就改对应的一项，别把整套参数搬过来。
 
-最小骨架：
+没有鼓的曲子照样可以分轨（鼓分轨为空，`mixdown` 会跳过）；没有实测 IR 时
+用 `sl.make_ir(2.2, 1.05, 180, 6500)` 合成一条。最小骨架：
 
 ```python
-import numpy as np, synth_lib as sl
+import synth_lib as sl, mix as mx
 sl.seed(7)
-BPM = 84; BEAT = 60 / BPM
-mix = np.zeros((2, int(60 * 44100))); send = np.zeros_like(mix)
-sl.add(mix, sl.guzheng(sl.midi2f(69), 1.0, 0.8), 0.0, -0.2, 1.0)
-mix = sl.apply_reverb(mix, send, 0.4)
-sl.write_wav("sketch.wav", sl.master(mix))
+st = sl.Stems(60.0)
+st.add("music", sl.guzheng(sl.midi2f(69), 1.0, 0.8), 0.0, -0.2, 1.0)
+bus = mx.mixdown(st, preset="chamber", ir=sl.make_ir(2.4, 1.0, 200, 6500))
+sl.write_wav("sketch.wav", bus)
 ```
+
+想听总线到底做了什么：`mx.write_stems("out", st)` 会把每条分轨单独写成 wav。
 
 ## 验收与交付
 

@@ -25,6 +25,9 @@ This bundle adds two capabilities to a DSH profile:
 |---|---|
 | `assets/style_probe.py` | the analysis probe used by the tool |
 | `assets/synth_lib.py` | additive-synthesis instruments: guzheng, dizi, xiao, erhu, pipa, yangqin, sheng, rhodes, pad, bass, drums, bells, gong, reverb, mastering |
+| `assets/sf2.py` | minimal SoundFont 2 reader/player (samples are not shipped) |
+| `assets/mix.py` | stem-wise mixdown: drum bus, multiband compression, IR reverb, limiter, knee clipper |
+| `assets/phrase.py` | motif development: transpose, invert, retrograde, augment, sequence, cadence |
 | `assets/templates/lofi.py` | full lo-fi example (49 s) |
 | `assets/templates/jiangnan.py` | full Jiangnan-style example (109 s) |
 | `assets/templates/pop_ballad.py` | pop-ballad starting point (piano/strings/bass/drums) |
@@ -48,6 +51,23 @@ mastering colour), so read them relatively.
 
 Naming an instrument from a mixed master would need stem separation; the probe
 deliberately does not guess.
+
+## Stems and the drum bus (1.5.0)
+
+Rendering into one bus is irreversible: once the kick and the strings are summed,
+no compressor can separate them again, which is why multiband compression over a
+full mix blunts the backbeat (measured: 2.01 -> 1.63 on the kit's own contrast).
+
+`synth_lib.Stems(seconds)` renders into `drums` / `bass` / `music` / `fx` and
+`mix.mixdown()` mixes them: the kit gets glue compression with a slow attack plus a
+parallel fast-attack copy, everything else gets the multiband compressor, and the
+two meet only at the sum. `fx` is a reverb-send-only stem.
+
+Two defects surfaced during this work and are fixed: the limiter's gain envelope
+was smoothed with a centred 90 ms window (it started ducking 45 ms before every
+snare hit), and `soft_clip` applied a tanh across the whole signal (2.4 dB of peak
+loss). Loudness is now targeted in dBFS and stereo width against a preset target
+rather than a fixed side multiplier.
 
 ## Notes
 

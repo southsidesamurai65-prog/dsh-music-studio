@@ -15,6 +15,7 @@ import numpy as np
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
+import mix as mx
 import synth_lib as sl
 
 SR = sl.SR
@@ -27,17 +28,20 @@ N = int((BARS * BAR + TAIL) * SR)
 
 sl.seed(11)
 P = sl.midi2f
-mix = np.zeros((2, N))
-send = np.zeros((2, N))
+
+# render into stems, not one bus: the kit needs its own compressor, and a
+# single bus cannot be un-mixed afterwards
+st = sl.Stems(N / SR)
 
 
 def bt(bar, beat=0.0):
     return (bar - 1) * BAR + beat * BEAT
 
 
-def place(sig, t0, pan=0.0, gain=1.0, rev=0.25):
-    sl.add(mix, sig, t0, pan, gain)
-    sl.add(send, sig, t0, pan * 0.7, gain * rev)
+def place(sig, t0, pan=0.0, gain=1.0, rev=0.25, role="music"):
+    st.add(role, sig, t0, pan, gain)
+    if rev:
+        st.add("fx", sig, t0, pan * 0.7, gain * rev)
 
 
 # ---------------------------------------------------------------- harmony
@@ -102,21 +106,26 @@ for bar in range(1, BARS + 1):
                   0.34 if not chorus else 0.5, 0.32)
 
     # bass
-    place(sl.ebass(P(bass_m), 0.6, .9), t0, 0.0, 0.8, 0.05)
-    place(sl.ebass(P(bass_m + 7), 0.5, .6), t0 + 2 * BEAT, 0.0, 0.7, 0.05)
+    place(sl.ebass(P(bass_m), 0.6, .9), t0, 0.0, 0.8, 0.05, role="bass")
+    place(sl.ebass(P(bass_m + 7), 0.5, .6), t0 + 2 * BEAT, 0.0, 0.7, 0.05, role="bass")
     if chorus:
-        place(sl.ebass(P(bass_m + 12), 0.4, .5), t0 + 3.5 * BEAT, 0.0, 0.6, 0.05)
+        place(sl.ebass(P(bass_m + 12), 0.4, .5), t0 + 3.5 * BEAT, 0.0, 0.6, 0.05,
+              role="bass")
 
     # drums: backbeat (snare on 2 and 4)
-    place(sl.kick(.85), t0, 0.0, 0.9, 0.02)
-    place(sl.kick(.65), t0 + 2 * BEAT, 0.0, 0.85, 0.02)
-    place(sl.snare(.55 if not chorus else .85), t0 + BEAT, 0.05, 0.85, 0.03)
-    place(sl.snare(.55 if not chorus else .85), t0 + 3 * BEAT, 0.05, 0.85, 0.03)
+    place(sl.kick(.85), t0, 0.0, 0.9, 0.02, role="drums")
+    place(sl.kick(.65), t0 + 2 * BEAT, 0.0, 0.85, 0.02, role="drums")
+    place(sl.snare(.55 if not chorus else .85), t0 + BEAT, 0.05, 0.85, 0.03,
+          role="drums")
+    place(sl.snare(.55 if not chorus else .85), t0 + 3 * BEAT, 0.05, 0.85, 0.03,
+          role="drums")
     for k in range(8):
-        place(sl.hat(k % 4 == 2, .28), t0 + 0.5 * k * BEAT, 0.55 if k % 2 else -0.2, 0.7, 0.02)
+        place(sl.hat(k % 4 == 2, .28), t0 + 0.5 * k * BEAT,
+              0.55 if k % 2 else -0.2, 0.7, 0.02, role="drums")
     if chorus:
         for k in range(16):
-            place(sl.shaker(.30), t0 + 0.25 * k * BEAT, -0.6 if k % 2 else 0.55, 0.8, 0.02)
+            place(sl.shaker(.30), t0 + 0.25 * k * BEAT,
+                  -0.6 if k % 2 else 0.55, 0.8, 0.02, role="drums")
 
 # ---------------------------------------------------------------- lead
 prev = None
@@ -127,13 +136,9 @@ for bar, beat, dur_b, m in MELODY:
     prev = P(m)
 
 # ---------------------------------------------------------------- mix
-mix = np.stack([sl.compress(sl.compress(mix[c], thresh_db=-32.0, ratio=3.0),
-                            thresh_db=-24.0, ratio=1.8) for c in range(2)])
-mix = sl.apply_reverb(mix, send, wet=0.22, sec=2.2, decay=1.05, lo=180, hi=6500)
-mid = 0.5 * (mix[0] + mix[1])
-side = 0.5 * (mix[0] - mix[1]) * 4.0
-mix = np.stack([mid + side, mid - side])
-mix = sl.master(mix, peak=0.64, lowpass=17000, highpass=32, air_db=1.0, sat=1.05)
+# drums -> glue + parallel bus; music -> multiband; both -> one reverb -> limiter
+ir = sl.make_ir(2.2, 1.05, 180, 6500)
+mix = mx.mixdown(st, preset="pop", ir=ir)
 
 sl.write_wav(str(HERE / "pop_ballad_demo.wav"), mix, fade_out=3.0)
 print("wrote pop_ballad_demo.wav  %.1fs" % (len(mix[0]) / SR))

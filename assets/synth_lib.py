@@ -62,6 +62,87 @@ def add(bus, sig, t0, pan=0.0, gain=1.0):
     bus[1, i:j] += seg * gain * np.sin(th)
 
 
+# --------------------------------------------------------------------- stems
+class Stems:
+    """Role-separated render buffers, so the mixer can still tell a snare from
+    a pad after the notes are placed.
+
+    Rendering into one `bus` is irreversible: once the kick and the strings are
+    summed, no compressor can tell them apart — which is why multiband
+    compression on a full mix blunts the backbeat. Render into stems, then let
+    `mix.mixdown()` decide what gets compressed.
+
+        st = sl.Stems(seconds)
+        st.add("drums", sl.snare(), t0, 0.05, 1.0)
+        st.add("music", sl.piano(f, 2.0), t0, 0.2, 0.5)
+        bus = mx.mixdown(st, preset="pop", ir=ir)
+    """
+
+    def __init__(self, seconds, sr=SR, roles=("drums", "bass", "music", "fx")):
+        self.sr = sr
+        self.n = int(round(seconds * sr))
+        self.buf = {r: np.zeros((2, self.n)) for r in roles}
+
+    def add(self, role, sig, t0, pan=0.0, gain=1.0):
+        """Place a mono signal into a stem (same semantics as `add`)."""
+        if sig is None or len(sig) == 0:
+            return
+        if role not in self.buf:
+            self.buf[role] = np.zeros((2, self.n))
+        add(self.buf[role], sig, t0, pan, gain)
+
+    def play(self, instrument, sig, t0, pan=0.0, gain=1.0):
+        """Like `add`, but pick the stem from the instrument's role in
+        INSTRUMENTS ("snare" -> drums, "ebass" -> bass, "dizi" -> music)."""
+        self.add(role_of(instrument), sig, t0, pan, gain)
+
+    def __getitem__(self, role):
+        return self.buf[role]
+
+    def __contains__(self, role):
+        return role in self.buf
+
+    def keys(self):
+        return list(self.buf)
+
+    def total(self):
+        out = np.zeros((2, self.n))
+        for v in self.buf.values():
+            out += v
+        return out
+
+    def peak_db(self, role):
+        p = float(np.max(np.abs(self.buf[role]))) if role in self.buf else 0.0
+        return 20 * np.log10(p + 1e-12)
+
+    def rms_db(self, role):
+        x = self.buf[role] if role in self.buf else np.zeros((2, self.n))
+        return 20 * np.log10(np.sqrt((x ** 2).mean()) + 1e-12)
+
+    def trim(self, role, db):
+        """Set the stem's fader. Balance is the composer's call, loudness the
+        limiter's."""
+        if role in self.buf:
+            self.buf[role] *= 10 ** (db / 20)
+        return self
+
+    def report(self):
+        rows = []
+        for r in self.buf:
+            if np.any(self.buf[r]):
+                rows.append(f"  {r:6s} peak {self.peak_db(r):6.1f} dB  "
+                            f"rms {self.rms_db(r):6.1f} dB")
+        return "stems:\n" + "\n".join(rows)
+
+
+def role_of(instrument):
+    """Map an instrument name to its mix stem via INSTRUMENTS."""
+    for role, names in INSTRUMENTS.items():
+        if instrument in names:
+            return "drums" if role == "drums" else ("bass" if role == "bass" else "music")
+    return "music"
+
+
 # ------------------------------------------------------------------ plucked
 def guzheng(freq, dur, vel=0.8, bend=0.0, bright=1.0):
     """Chinese zither: bright pick, inharmonic shimmer, long decay."""
@@ -527,44 +608,59 @@ INSTRUMENTS = {
     "counter": ["erhu", "violin", "cello", "xiao", "pipa_tremolo"],
     "rhythm": ["piano", "guzheng", "pipa_pluck", "yangqin", "rhodes"],
     "bass": ["bass", "bass_pluck", "ebass", "cello"],
-    "drums": ["kick", "snare", "hat", "shaker", "clap", "rim", "drum_low", "muyu", "timpani"],
+    "drums": ["kick", "snare", "hat", "shaker", "clap", "rim", "drum_low", "muyu"],
     "pad": ["pad", "strings", "choir", "sheng"],
     "colour": ["guzheng", "pipa_pluck", "yangqin", "bell", "gong"],
 }
 
 # A mix preset is a starting point, not a law: re-measure and adjust.
+# `drums` runs on its own bus (glue + parallel) and is NOT multiband
+# compressed; `music` is. `width_target` is solved for by scaling the side
+# signal; `target_rms_db` is the loudness the limiter aims at.
 MIX_PRESETS = {
     "chamber": {
-        "reverb_wet": 0.30, "reverb_sec": 2.4, "lowcut_hz": 160,
-        "compress": [(-34, 3.0)], "peak": 0.66, "width_side_gain": 2.8,
+        "reverb_wet": 0.30, "drum_wet": 0.22, "reverb_sec": 2.4, "lowcut_hz": 160,
+        "compress": [(-34, 3.0)], "peak": 0.66, "width_target": 0.35,
+        "target_rms_db": -17.0, "knee": 0.6,
         "targets": {"centroid_hz": (450, 900), "width": (0.30, 0.55), "crest_db": (12, 16)},
         "crossovers": (200.0, 2000.0), "mb_thresh_db": (-32.0, -30.0, -33.0),
         "mb_ratio": 1.6, "mb_attack_ms": 15.0, "mb_release_ms": 180.0,
         "ceiling_db": -1.0, "predelay_ms": 18.0,
+        "drum_thresh_db": -17.0, "drum_ratio": 2.2, "drum_attack_ms": 30.0,
+        "drum_release_ms": 180.0, "drum_parallel": 0.20,
     },
     "pop": {
-        "reverb_wet": 0.20, "reverb_sec": 2.0, "lowcut_hz": 200,
-        "compress": [(-32, 2.6)], "peak": 0.90, "width_side_gain": 4.6,
+        "reverb_wet": 0.20, "drum_wet": 0.10, "reverb_sec": 2.0, "lowcut_hz": 200,
+        "compress": [(-32, 2.6)], "peak": 0.90, "width_target": 0.42,
+        "target_rms_db": -13.0, "knee": 0.5,
         "targets": {"centroid_hz": (500, 800), "width": (0.35, 0.55), "crest_db": (10, 14)},
         "crossovers": (200.0, 2000.0), "mb_thresh_db": (-30.0, -28.0, -32.0),
         "mb_ratio": 2.0, "mb_attack_ms": 12.0, "mb_release_ms": 150.0,
         "ceiling_db": -1.0, "predelay_ms": 22.0,
+        "drum_thresh_db": -16.0, "drum_ratio": 2.4, "drum_attack_ms": 28.0,
+        "drum_release_ms": 170.0, "drum_parallel": 0.25,
     },
     "lofi": {
-        "reverb_wet": 0.25, "reverb_sec": 1.8, "lowcut_hz": 180,
-        "compress": [(-30, 2.4)], "peak": 0.72, "width_side_gain": 1.6,
+        "reverb_wet": 0.25, "drum_wet": 0.14, "reverb_sec": 1.8, "lowcut_hz": 180,
+        "compress": [(-30, 2.4)], "peak": 0.72, "width_target": 0.25,
+        "target_rms_db": -14.5, "knee": 0.4,
         "targets": {"centroid_hz": (400, 900), "width": (0.15, 0.35), "crest_db": (12, 18)},
         "crossovers": (250.0, 2500.0), "mb_thresh_db": (-34.0, -32.0, -34.0),
         "mb_ratio": 1.4, "mb_attack_ms": 20.0, "mb_release_ms": 200.0,
         "ceiling_db": -1.5, "predelay_ms": 10.0,
+        "drum_thresh_db": -19.0, "drum_ratio": 2.0, "drum_attack_ms": 35.0,
+        "drum_release_ms": 220.0, "drum_parallel": 0.30,
     },
     "cinematic": {
-        "reverb_wet": 0.42, "reverb_sec": 3.2, "lowcut_hz": 140,
-        "compress": [(-38, 2.2)], "peak": 0.70, "width_side_gain": 3.2,
+        "reverb_wet": 0.42, "drum_wet": 0.28, "reverb_sec": 3.2, "lowcut_hz": 140,
+        "compress": [(-38, 2.2)], "peak": 0.70, "width_target": 0.45,
+        "target_rms_db": -17.5, "knee": 0.7,
         "targets": {"centroid_hz": (400, 1000), "width": (0.35, 0.60), "crest_db": (14, 20)},
         "crossovers": (180.0, 1800.0), "mb_thresh_db": (-34.0, -32.0, -36.0),
         "mb_ratio": 1.5, "mb_attack_ms": 25.0, "mb_release_ms": 260.0,
         "ceiling_db": -2.0, "predelay_ms": 30.0,
+        "drum_thresh_db": -14.0, "drum_ratio": 3.0, "drum_attack_ms": 35.0,
+        "drum_release_ms": 240.0, "drum_parallel": 0.30,
     },
 }
 
@@ -575,6 +671,9 @@ def palette(preset="pop"):
     lines = [f"preset: {preset}  (targets: {p['targets']})", "roles:"]
     for role, names in INSTRUMENTS.items():
         lines.append(f"  {role:8s} {', '.join(names)}")
+    lines.append(f"mix: drums glue {p['drum_ratio']}:1 @ {p['drum_thresh_db']:.0f} dB "
+                 f"(attack {p['drum_attack_ms']:.0f} ms, parallel {p['drum_parallel']:.2f}), "
+                 f"music MB {p['mb_ratio']}:1, width target {p.get('width_target', 0.4):.2f}")
     return "\n".join(lines)
 
 
