@@ -28,6 +28,11 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.7.4 — packaging. The tarball had grown to 9 MB because running
+  `templates/pop_ballad.py` writes a demo wav next to itself and `files: ["assets"]`
+  swept it in. `files` now excludes rendered audio and images, so the package is
+  80 KB again; the 1.7.1–1.7.3 tarballs in `dist/` were deleted (their tags on
+  GitHub are source-only, so nothing is lost).
 - 1.7.3 — harmony, part three: pivot modulation. Slots now remember their key, so
   `Progression.modulate(target, at_bar)` can keep the bars before the change,
   insert a chord diatonic in both keys as a pivot, and regenerate the rest in the
