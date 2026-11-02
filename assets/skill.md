@@ -118,6 +118,27 @@ y = piano(sl.midi2f(60), 2.0, 0.8)       # 和合成乐器同样的调用方式
 - 采样乐器自带力度与音区分层，比合成件更像真的；代价是体积和加载时间。
 - 合成件仍然有用：需要非真实音色、或没有对应 GM 音色时（如笙、木鱼）。
 
+## 混音总线（`mix.py`）
+
+合成/采样给的是**素材**，总线给的是**成品感**：
+
+```python
+import mix as mx
+ir = mx.load_ir("ConradPrebysConcertHall.wav")   # 实测脉冲响应
+bus = mx.reverb(bus, ir, wet=0.32, predelay=0.022)      # 真房间
+bus = mx.multiband_compress(bus, (200.0, 2000.0),
+                            (-30.0, -28.0, -32.0), ratio=2.0,
+                            makeup_db=(2.5, 2.0, 2.5))  # 分频段压
+bus = mx.limiter(bus, ceiling_db=-1.5, lookahead_ms=6)  # 前视限幅
+bus = mx.soft_clip(bus, ceiling_db=-1.0, drive_db=3.5)  # 最后几 dB
+```
+
+- **顺序**：混响 → 均衡 → 多段压缩 → 段落增益 → 限幅 → 软削波。
+- 多段压缩保住了“低频不糊、中频不挤”，但也**会削反拍**：军鼓的瞬态在
+  200–2000 Hz 那一档里。想保住鼓点，就把那一档的阈值调高、比率调低。
+- 软削波能补上 2–3 dB 响度，但超过 4 dB 就会听出“压扁”。
+- 目标参考：crest 10–13 dB、RMS 对齐参考、宽度 0.35–0.45。
+
 ## 混音预设
 
 `sl.MIX_PRESETS` 是**起点**（混响湿度/时长、压缩档、母带峰值、宽度增益、目标区间）：

@@ -7,6 +7,7 @@ A DSH bundle for reference-driven music sketching.
 - `assets/synth_lib.py` — numpy instruments (Chinese ensemble + lo-fi kit), reverb, mastering
 - `assets/templates/` — three starting points (lo-fi, 江南, pop ballad)
 - `assets/sf2.py` — SoundFont 2 player for real sampled instruments (bring your own bank)
+- `assets/mix.py` — convolution reverb, multiband compression, limiter, soft clip
 
 Install into a profile from the directory that contains this package:
 
@@ -23,6 +24,11 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.3.0 — mixing bus. `assets/mix.py`: real-IR convolution reverb (predelay +
+  high-pass), zero-phase multiband compression with soft knee and makeup gain,
+  a look-ahead peak limiter, and a soft clipper. `MIX_PRESETS` gained the bus
+  parameters and `apply_bus()` chains them. Everything is numpy; 180 s of audio
+  processes in about 5 s.
 - 1.2.0 — sampled instruments. `assets/sf2.py` is a numpy-only SoundFont 2 reader
   (zones, velocity layers, loop points, volume envelope, tuning, attenuation, pan)
   and `synth_lib.use_soundfont()` / `synth_lib.sf_play()` expose it with the same

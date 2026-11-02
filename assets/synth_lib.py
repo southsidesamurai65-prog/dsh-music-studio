@@ -538,21 +538,33 @@ MIX_PRESETS = {
         "reverb_wet": 0.30, "reverb_sec": 2.4, "lowcut_hz": 160,
         "compress": [(-34, 3.0)], "peak": 0.66, "width_side_gain": 2.8,
         "targets": {"centroid_hz": (450, 900), "width": (0.30, 0.55), "crest_db": (12, 16)},
+        "crossovers": (200.0, 2000.0), "mb_thresh_db": (-32.0, -30.0, -33.0),
+        "mb_ratio": 1.6, "mb_attack_ms": 15.0, "mb_release_ms": 180.0,
+        "ceiling_db": -1.0, "predelay_ms": 18.0,
     },
     "pop": {
         "reverb_wet": 0.20, "reverb_sec": 2.0, "lowcut_hz": 200,
         "compress": [(-32, 2.6)], "peak": 0.90, "width_side_gain": 4.6,
         "targets": {"centroid_hz": (500, 800), "width": (0.35, 0.55), "crest_db": (10, 14)},
+        "crossovers": (200.0, 2000.0), "mb_thresh_db": (-30.0, -28.0, -32.0),
+        "mb_ratio": 2.0, "mb_attack_ms": 12.0, "mb_release_ms": 150.0,
+        "ceiling_db": -1.0, "predelay_ms": 22.0,
     },
     "lofi": {
         "reverb_wet": 0.25, "reverb_sec": 1.8, "lowcut_hz": 180,
         "compress": [(-30, 2.4)], "peak": 0.72, "width_side_gain": 1.6,
         "targets": {"centroid_hz": (400, 900), "width": (0.15, 0.35), "crest_db": (12, 18)},
+        "crossovers": (250.0, 2500.0), "mb_thresh_db": (-34.0, -32.0, -34.0),
+        "mb_ratio": 1.4, "mb_attack_ms": 20.0, "mb_release_ms": 200.0,
+        "ceiling_db": -1.5, "predelay_ms": 10.0,
     },
     "cinematic": {
         "reverb_wet": 0.42, "reverb_sec": 3.2, "lowcut_hz": 140,
         "compress": [(-38, 2.2)], "peak": 0.70, "width_side_gain": 3.2,
         "targets": {"centroid_hz": (400, 1000), "width": (0.35, 0.60), "crest_db": (14, 20)},
+        "crossovers": (180.0, 1800.0), "mb_thresh_db": (-34.0, -32.0, -36.0),
+        "mb_ratio": 1.5, "mb_attack_ms": 25.0, "mb_release_ms": 260.0,
+        "ceiling_db": -2.0, "predelay_ms": 30.0,
     },
 }
 
