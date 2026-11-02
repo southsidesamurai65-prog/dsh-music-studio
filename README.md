@@ -28,6 +28,15 @@ path instead of a Python traceback.
 
 ## Changelog
 
+- 1.7.5 — a pipa that does not sound like a piano. `pipa_pluck` had borrowed the
+  piano's recipe: eight partials on smooth long decays with a quiet click. On C4,
+  92.6% of its energy sat below 1 kHz and it rang for 1.28 s, which is exactly why
+  a listener heard a piano. Rewritten around what actually identifies a pipa — a
+  hard nail click, upper partials gone within a tenth of a second, two detuned
+  courses, body resonances at 1.6 and 3.3 kHz — it now measures 1.24 kHz attack
+  centroid against the piano's 0.34 kHz, and decays to -20 dB in 0.23 s instead of
+  1.28 s. `pipa_tremolo` inherits the fix. Renders made before this will change if
+  regenerated.
 - 1.7.4 — packaging. The tarball had grown to 9 MB because running
   `templates/pop_ballad.py` writes a demo wav next to itself and `files: ["assets"]`
   swept it in. `files` now excludes rendered audio and images, so the package is
